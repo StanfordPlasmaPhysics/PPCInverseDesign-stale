@@ -2,7 +2,7 @@
 The module composed in this file is meant to serve as a platform for
 designing plasma metamaterial devices and then optimizing the plasma density
 of the elements composing the metamaterial to achieve a certain functionality.
-It is built atop ceviche, an autograd compliant FDFD EM simulation tool 
+It is built atop ceviche, an autograd compliant FDFD/FDTD EM simulation tool 
 (https://github.com/fancompute/ceviche).
 Jesse A Rodriguez, 09/15/2020
 """
@@ -19,76 +19,16 @@ from ceviche import fdfd_ez, jacobian, fdfd_hz
 from ceviche.optimizers import adam_optimize
 from ceviche.modes import insert_mode
 import collections
-from make_gif import make_gif
 
-## Ahmed's plotting tools #####################################################
-# set the colormap and centre the colorbar
-class MidpointNormalize(mpl.colors.Normalize):
+## Utility Functions ##########################################################
+def mode_overlap(E1, E2):
     """
-    Normalise the colorbar so that diverging bars work there way either side 
-    from a prescribed midpoint value)
+    Defines an overlap integral between the sim field and desired field
 
-    e.g. im=ax1.imshow(array, norm=MidpointNormalize(midpoint=0.,vmin=-100, vmax=100))
+    Args:
+        E1, E2: Matrices with solved field values
     """
-    def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
-        self.midpoint = midpoint
-        mpl.colors.Normalize.__init__(self, vmin, vmax, clip)
-
-    def __call__(self, value, clip=None):
-        # I'm ignoring masked values and all kinds of edge cases to make a
-        # simple example...
-        x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.5, 1]
-        return np.ma.masked_array(np.interp(value, x, y), np.isnan(value))
-    
-def real(val, outline=None, ax=None, cbar=False, cmap='RdBu', outline_alpha=0.5,\
-         vmin=None, vmax=None):
-    """
-    Plots the real part of 'val', optionally overlaying an outline of 'outline'
-    """
-    if ax is None:
-        fig, ax = plt.subplots(1, 1, constrained_layout=True)
-    
-    if vmin is None:
-        vmax = np.real(val).max()
-        vmin = np.real(val).min()
-    h = ax.imshow(np.real(val.T), cmap=cmap, origin='lower', clim=(vmin, vmax),\
-                  norm=MidpointNormalize(midpoint=0,vmin=vmin,vmax=vmax))
-    
-    if outline is not None:
-        ax.contour(outline.T, 0, colors='k', alpha=outline_alpha)
-
-    if cbar:
-        cbar = plt.colorbar(h, ax=ax)
-        cbar.set_ticks([-6, 0, 1])
-        cbar.set_ticklabels(['-6', '0', '1'])
-        cbar.ax.set_ylabel('Relative Permittivity')
-    
-    return ax
-
-def abslt(val, outline=None, ax=None, cbar=False, cmap='magma', outline_alpha=0.5,\
-          outline_val=None, vmax=None):
-    """
-    Plots the absolute value of 'val', optionally overlaying an outline of 
-    'outline'
-    """
-    if ax is None:
-        fig, ax = plt.subplots(1, 1, constrained_layout=True)      
-    
-    if vmax is None:
-        vmax = np.abs(val).max()
-    h = ax.imshow(np.abs(val.T), cmap=cmap, origin='lower', vmin=0, vmax=vmax)
-    
-    if outline_val is None and outline is not None: 
-        outline_val = 0.5*(outline.min()+outline.max())
-    if outline is not None:
-        ax.contour(outline.T, [outline_val], colors='w', alpha=outline_alpha)
-
-    if cbar:
-        cbar = plt.colorbar(h, ax=ax)
-        cbar.set_ticks([])
-        cbar.ax.set_ylabel('Electric Field Strength')
-    
-    return ax
+    return npa.abs(npa.sum(npa.conj(E1)*E2))*1e6
 ###############################################################################
 
 class PMMI:
@@ -113,8 +53,28 @@ class PMMI:
         self.Nx = nx*res #Number of pixels in x-direction
         self.Ny = ny*res #Number of pixels in y-direction
         self.epsr = np.ones((self.Nx, self.Ny)) #Initialize relative perm array
+        self.design_region = np.zeros((self.Nx,self.Ny)) #Design region array
+        self.train_elems = [] #Masks for trainable elements
+        self.static_elems = np.ones((self.Nx, self.Ny)) #Array for static elements
+                                                         #outside the training region.
         self.sources = {} #Empty dict to hold source arrays
         self.probes = {} #Empty dict to hold probe arrays
+
+    def Design_Region(self, bot_left, extent):
+        """
+        Specify design region selector
+
+        Args:
+            bot_left: coords of bottom left ocrner of design region in a units
+            extent: width and height of design region
+        """
+        X = int(round(bot_left[0]*self.res))
+        Y = int(round(bot_left[1]*self.res))
+        W = int(round(bot_left[0]*self.res))
+        H = int(round(bot_left[1]*self.res))
+
+        self.design_region[X:(X+W),Y:(Y+H)] = 1
+
 
     def Add_Rod(self, r, x, y, eps):
         """
@@ -124,7 +84,7 @@ class PMMI:
             r: radius of the rod in a units
             x: x-coordinate in a units
             y: y-coordinate in a units
-            eps: relative permittivity of the rod
+            eps: relative permittivity
         """
         R = int(round(r*self.res))
         X = int(round(x*self.res))
@@ -132,6 +92,26 @@ class PMMI:
         rr, cc = disk((X, Y), R, shape = self.epsr.shape)
         
         self.epsr[rr, cc] = eps
+
+
+    def Add_Rod_train(self, r, x, y):
+        """
+        Add a single rod with radius r and rel. permittivity eps to the trainable
+        element array.
+
+        Args:
+            r: radius of the rod in a units
+            x: x-coordinate in a units
+            y: y-coordinate in a units
+        """
+        R = int(round(r*self.res))
+        X = int(round(x*self.res))
+        Y = int(round(y*self.res))
+        rr, cc = disk((X, Y), R, shape = self.epsr.shape)
+        
+        train_elem = np.zeros((self.epsr.shape))
+        train_elem[rr, cc] = 1
+        self.train_elems.append(train_elem)
 
 
     def Add_Block(self, w, h, x, y, eps):
@@ -152,6 +132,27 @@ class PMMI:
         rr, cc = rectangle((X, Y), extent = (W, H), shape = self.epsr.shape)
 
         self.epsr[rr, cc] = eps
+
+
+    def Add_Block_static(self, w, h, x, y, eps):
+        """
+        Add a single rod with radius r and rel. permittivity eps to the static
+        elems array.
+
+        Args:
+            w: width (x-dir) of the block in a units
+            h: height (y-dir) of the block in a units
+            x: x-coordinate of the bottom left corner in a units
+            y: y-coordinate of the bottom left corner in a units
+            eps: relative permittivity of the block
+        """
+        H = int(round(h*self.res))
+        W = int(round(w*self.res))
+        X = int(round(x*self.res))
+        Y = int(round(y*self.res))
+        rr, cc = rectangle((X, Y), extent = (W, H), shape = self.epsr.shape)
+
+        self.static_elems[rr, cc] = eps
 
 
     def Add_Source(self, xy_begin, xy_end, w, src_name, pol):
@@ -182,43 +183,75 @@ class PMMI:
         self.sources[src_name] = (src, omega, pol)
         
 
-    def Add_Probe(self, prb_x, prb_y, prb_name):
+    def Add_Probe(self, xy_begin, xy_end, w, prb_name, pol):
         """
         Add a probe to the domain.
 
         Args:
-            prb_x: 1-d array containing the x-coords of of the probe pixels
-            prb_y: 1-d array containing the y-coords of of the probe pixels
+            xy_begin: coords of the start of the probe in a units (np.array)
+            xy_end: coords of the end of the probe in a units (np.array)
+            w: Probe frequency in c/a units
             src_name: string that serves as key for the probe in the dict
+            pol: string specifying the polarization of the probe e.g. 'hz'
         """
-        probe = np.zeros((self.Nx, self.Ny), dtype=np.complex)
-        source[src_x, src_y] = 1
+        XY_beg = (np.rint(xy_begin*self.res)).astype(int)
+        XY_end = (np.rint(xy_end*self.res)).astype(int)
+        if XY_beg[0] == XY_end[0]:
+            prb_y = (np.arange(XY_beg[1],XY_end[1])).astype(int)
+            prb_x = XY_beg[0]*np.ones(prb_y.shape, dtype=int)
+        elif XY_beg[1] == XY_end[1]:
+            prb_x = (np.arange(XY_beg[0], XY_end[0])).astype(int)
+            prb_y = XY_beg[1]*np.ones(prb_x.shape, dtype=int)
+        else:
+            raise RuntimeError("Probe needs to be 1-D")
 
-        self.sources[src_name] = source
+        omega = 2*np.pi*w*299792458/self.a
+        prb = insert_mode(omega, self.dl, prb_x, prb_y, self.epsr, m = 1)
+
+        self.probes[prb_name] = (prb, omega, pol)
 
 
-    def Rod_Array(self, r, x_start, y_start, nrods_x, nrods_y, rod_eps,\
-                  d_x = 1, d_y = 1):
+    def Rod_Array(self, r, x_start, y_start, rod_eps, d_x = 1, d_y = 1):
         """
-        Add a 2D rectangular rod array to the domain. All rods are spaced 1 a
+        Add a 2D rectangular rod array to epsr. All rods are spaced 1 a
         in the x and y direction by default.
 
         Args:
             r: radius of rods in a units
             x_start: x-coord of the bottom left of the array in a units
             y_start: y-coord of the bottom right of the array in a units
-            nrods_x: number of rods in x-direction
-            nrods_y: number of rods in y-direction
             rod_eps: np array of size nrods_x by nrods_y giving the relative 
                      permittivity of each of the rods
             d_x: lattice spacing in x-direction in a units
             d_y: lattice spacing in y-direction in a units
         """
-        for i in range(nrods_x):
-            for j in range(nrods_y):
+        for i in range(rod_eps.shape[0]):
+            for j in range(rod_eps.shape[1]):
                 x = x_start + i*d_x
                 y = y_start + j*d_y
-                self.Add_Rod(r, x, y, rod_eps[i,j])
+                rod_e = rod_eps[i,j]
+                if not isinstance(rod_eps[i,j], np.float64):
+                    rod_e = rod_eps[i,j]._value
+                self.Add_Rod(r, x, y, rod_e)
+
+
+    def Rod_Array_train(self, r, x_start, y_start, array_dims, d_x = 1, d_y = 1):
+        """
+        Add a 2D rectangular rod array to the train elems. All rods are spaced 1 a
+        in the x and y direction by default.
+
+        Args:
+            r: radius of rods in a units
+            x_start: x-coord of the bottom left of the array in a units
+            y_start: y-coord of the bottom right of the array in a units
+            d_x: lattice spacing in x-direction in a units
+            d_y: lattice spacing in y-direction in a units
+        """
+        for i in range(array_dims[0]):
+            for j in range(array_dims[1]):
+                x = x_start + i*d_x
+                y = y_start + j*d_y
+                self.Add_Rod_train(r, x, y)
 
 
     def Viz_Sim_abs(self, src_name, slices=[]):
@@ -259,3 +292,285 @@ class PMMI:
         else:
             raise RuntimeError('The polarization associated with this source is\
                                 not valid.')
+
+
+    def Viz_Sim_fields(self, src_name, slices=[]):
+        """
+        Solve and visualize a simulation with a certain source active
+        
+        Args:
+            src_name: string that indicates which source you'd like to simulate
+        """
+        if self.sources[src_name][2] == 'hz':
+            simulation = fdfd_hz(self.sources[src_name][1], self.dl, self.epsr,\
+                         [self.Npml, self.Npml])
+            Ex, Ey, Hz = simulation.solve(self.sources[src_name][0])
+            
+            fig, ax = plt.subplots(1, 2, constrained_layout=True, figsize=(6,3))
+            ceviche.viz.abs(Hz, outline=self.epsr, ax=ax[0], cbar=False)
+            for sl in slices:
+                ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+            ceviche.viz.real(self.epsr, ax=ax[1], cmap='Greys');
+            plt.show()
+
+            return (simulation, ax)
+
+        elif self.sources[src_name][2] == 'ez':
+            simulation = fdfd_ez(self.sources[src_name][1], self.dl, self.epsr,\
+                         [self.Npml, self.Npml])
+            Hx, Hy, Ez = simulation.solve(self.sources[src_name][0])
+
+            fig, ax = plt.subplots(1, 2, constrained_layout=True, figsize=(6,3))
+            ceviche.viz.abs(Ez, outline=self.epsr, ax=ax[0], cbar=False)
+            for sl in slices:
+                ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+            ceviche.viz.real(self.epsr, ax=ax[1], cmap='Greys');
+            plt.show()
+
+            return (simulation, ax)
+
+        else:
+            raise RuntimeError('The polarization associated with this source is\
+                                not valid.')
+
+
+    def Viz_Sim_abs_opt(self, rho, bounds, src_name, slices=[]):
+        """
+        Solve and visualize an optimized simulation with a certain source active
+        
+        Args:
+            rho: optimal parameters
+            src_name: string that indicates which source you'd like to simulate
+        """
+        if self.sources[src_name][2] == 'hz':
+            epsr_opt = self.Rho_Parameterization(rho, bounds)
+            simulation = fdfd_hz(self.sources[src_name][1], self.dl, epsr_opt,\
+                         [self.Npml, self.Npml])
+            Ex, Ey, Hz = simulation.solve(self.sources[src_name][0])
+            
+            fig, ax = plt.subplots(1, 2, constrained_layout=True, figsize=(6,3))
+            ceviche.viz.abs(Hz, outline=epsr_opt, ax=ax[0], cbar=False)
+            for sl in slices:
+                ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+            ceviche.viz.abs(epsr_opt, ax=ax[1], cmap='Greys');
+            plt.show()
+
+            return (simulation, ax)
+
+        elif self.sources[src_name][2] == 'ez':
+            epsr_opt = self.Rho_Parameterization(rho, bounds)
+            simulation = fdfd_ez(self.sources[src_name][1], self.dl, epsr_opt,\
+                         [self.Npml, self.Npml])
+            Hx, Hy, Ez = simulation.solve(self.sources[src_name][0])
+
+            fig, ax = plt.subplots(1, 2, constrained_layout=True, figsize=(6,3))
+            ceviche.viz.abs(Ez, outline=epsr_opt, ax=ax[0], cbar=False)
+            for sl in slices:
+                ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+            ceviche.viz.abs(epsr_opt, ax=ax[1], cmap='Greys');
+            plt.show()
+
+            return (simulation, ax)
+
+        else:
+            raise RuntimeError('The polarization associated with this source is\
+                                not valid.')
+
+
+    def Viz_Sim_fields_opt(self, rho, bounds, src_name, slices=[]):
+        """
+        Solve and visualize a simulation with a certain source active
+        
+        Args:
+            src_name: string that indicates which source you'd like to simulate
+        """
+        if self.sources[src_name][2] == 'hz':
+            epsr_opt = self.Rho_Parameterization(rho, bounds)
+            simulation = fdfd_hz(self.sources[src_name][1], self.dl, epsr_opt,\
+                         [self.Npml, self.Npml])
+            Ex, Ey, Hz = simulation.solve(self.sources[src_name][0])
+            
+            fig, ax = plt.subplots(1, 2, constrained_layout=True, figsize=(6,3))
+            ceviche.viz.abs(Hz, outline=epsr_opt, ax=ax[0], cbar=False)
+            for sl in slices:
+                ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+            ceviche.viz.real(epsr_opt, ax=ax[1], cmap='Greys');
+            plt.show()
+
+            return (simulation, ax)
+
+        elif self.sources[src_name][2] == 'ez':
+            epsr_opt = self.Rho_Parameterization(rho, bounds)
+            simulation = fdfd_ez(self.sources[src_name][1], self.dl, epsr_opt,\
+                         [self.Npml, self.Npml])
+            Hx, Hy, Ez = simulation.solve(self.sources[src_name][0])
+
+            fig, ax = plt.subplots(1, 2, constrained_layout=True, figsize=(6,3))
+            ceviche.viz.abs(Ez, outline=epsr_opt, ax=ax[0], cbar=False)
+            for sl in slices:
+                ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+            ceviche.viz.real(epsr_opt, ax=ax[1], cmap='Greys');
+            plt.show()
+
+            return (simulation, ax)
+
+        else:
+            raise RuntimeError('The polarization associated with this source is\
+                                not valid.')
+
+
+    def Mask_Combine_Rho(self, train_epsr, bounds, eps_bg_des):
+        """
+        Utility function for combining the design region with its trainable 
+        elements and the static region
+
+        Args:
+            train_epsr: An np array that is the size of the domain and contains
+            zeros everywhere except the location of the trainable elements where
+            their scaled epsilon values are present.
+            bounds: Array containing the upper and lower bounds of the perm of
+            the trainable elements
+            eps_bg_des: Float, permittivity of the background in the design region
+        """
+        train = (bounds[1] - bounds[0])*train_epsr*(train_epsr!=0).astype(np.float)\
+                + bounds[0]*(train_epsr!=0).astype(np.float)
+        design = eps_bg_des*self.design_region*(train_epsr==0).astype(np.float)
+        bckgd = self.static_elems*(self.design_region==0).astype(np.float)
+
+        return train + design + bckgd
+
+
+    def Scale_Rho(self, rho):
+        """
+        Applies a non-linear activation to the optimization parameters
+
+        Args:
+            rho: Parameters being optimized
+        """
+        rho = rho.flatten()
+        rho = npa.arctan(rho) / np.pi + 0.5
+        train_epsr = np.zeros(self.train_elems[0].shape)
+        for i in range(len(rho)):
+            train_epsr += rho[i]*self.train_elems[i] #keep this line in mind for alignment issues
+
+        return train_epsr
+
+
+    def Rho_Parameterization(self, rho, bounds, eps_bg_des = 1):
+        """
+        Apply activation and create a permittivity matrix
+
+        Args:
+            rho: parameters to be optimized
+            bounds: upper and lower limits for the elements of rho
+            eps_bg_des: background epsilon for the design/optimization region
+        """
+        train_epsr = self.Scale_Rho(rho)
+
+        return self.Mask_Combine_Rho(train_epsr, bounds, eps_bg_des)
+
+
+    def Optimize_Multiplexer(self, Rho, bounds, src_1, src_2, prb_1, prb_2,\
+                             alpha, nepochs):
+        """
+        Optimize a multiplexer PMM composed of plasma rods
+
+        Args:
+            bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
+            src_1: Key for source 1 in the sources dict.
+            src_2: Key for source 1 in the sources dict.
+            prb_1: Key for probe 1 in the probes dict.
+            prb_2: Key for probe 2 in the probes dict.
+            alpha: Adam learning rate.
+            nepochs: Number of training epochs.
+        """
+        if self.sources[src_1][2] == 'hz' and self.sources[src_2][2] == 'hz':
+            #Begin by running sim with initial parameters to get normalization consts
+            epsr_init = self.Rho_Parameterization(Rho, bounds)
+            sim1 = fdfd_hz(self.sources[src_1][1], self.dl, epsr_init,\
+                           [self.Npml, self.Npml])
+            sim2 = fdfd_hz(self.sources[src_2][1], self.dl, epsr_init,\
+                           [self.Npml, self.Npml])
+            Ex1, _, _ = sim1.solve(self.sources[src_1][0])
+            Ex2, _, _ = sim2.solve(self.sources[src_2][0])
+            E01 = mode_overlap(Ex1, self.probes[prb_1][0])
+            E02 = mode_overlap(Ex2, self.probes[prb_2][0])
+            
+            #Define objective
+            def objective(rho):
+                """
+                Objective function called by optimizer
+
+                1) Takes the density distribution as input
+                2) Constructs epsr
+                3) Runs the simulation
+                4) Returns the overlap integral between the output wg field
+                and the desired mode field
+                """
+                rho = rho.reshape(Rho.shape)
+                epsr = self.Rho_Parameterization(rho, bounds)
+                sim1.eps_r = epsr
+                sim2.eps_r = epsr
+
+                Ex1, _, _ = sim1.solve(self.sources[src_1][0])
+                Ex2, _, _ = sim2.solve(self.sources[src_2][0])
+
+                return (mode_overlap(Ex1, self.probes[prb_1][0])/E01)*\
+                       (mode_overlap(Ex2, self.probes[prb_2][0])/E02)
+
+            # Compute the gradient of the objective function
+            objective_jac = jacobian(objective, mode='reverse')
+
+            # Maximize the objective function using an ADAM optimizer
+            rho_optimum, _ = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs, bounds=bounds,\
+                                direction = 'max', step_size = alpha)
+
+            return rho_optimum.reshape(Rho.shape)
+
+        elif self.sources[src_1][2] == 'ez' and self.sources[src_2][2] == 'ez':
+            #Begin by running sim with initial parameters to get normalization consts
+            epsr_init = self.Rho_Parameterization(Rho, bounds)
+            sim1 = fdfd_ez(self.sources[src_1][1], self.dl, epsr_init,\
+                           [self.Npml, self.Npml])
+            sim2 = fdfd_ez(self.sources[src_2][1], self.dl, epsr_init,\
+                           [self.Npml, self.Npml])
+            _, _, Ez1 = sim1.solve(self.sources[src_1][0])
+            _, _, Ez2 = sim2.solve(self.sources[src_2][0])
+            E01 = mode_overlap(Ez1, self.probes[prb_1][0])
+            E02 = mode_overlap(Ez2, self.probes[prb_1][0])
+            
+            #Define objective
+            def objective(rho):
+                """
+                Objective function called by optimizer
+
+                1) Takes the density distribution as input
+                2) Constructs epsr
+                3) Runs the simulation
+                4) Returns the overlap integral between the output wg field
+                and the desired mode field
+                """
+                rho = rho.reshape(Rho.shape)
+                epsr = self.Rho_Parameterization(rho, bounds)
+                sim1.eps_r = epsr
+                sim2.eps_r = epsr
+
+                _, _, Ez1 = sim1.solve(self.sources[src_1][0])
+                _, _, Ez2 = sim2.solve(self.sources[src_2][0])
+
+                return (mode_overlap(Ez1, self.probes[prb_1][0])/E01)*\
+                       (mode_overlap(Ez2, self.probes[prb_2][0])/E02)
+
+            # Compute the gradient of the objective function
+            objective_jac = jacobian(objective, mode='reverse')
+
+            # Maximize the objective function using an ADAM optimizer
+            rho_optimum, _ = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs, bounds=bounds,\
+                                direction = 'max', step_size = alpha)
+
+            return rho_optimum.reshape(Rho.shape)
+
+        else:
+            raise RuntimeError("The two sources must have the same polarization.")
