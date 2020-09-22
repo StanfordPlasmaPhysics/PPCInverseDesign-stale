@@ -76,37 +76,35 @@ class PMMI:
         self.design_region[X:(X+W),Y:(Y+H)] = 1
 
 
-    def Add_Rod(self, r, x, y, eps):
+    def Add_Rod(self, r, center, eps):
         """
         Add a single rod with radius r and rel. permittivity eps to epsr.
 
         Args:
             r: radius of the rod in a units
-            x: x-coordinate in a units
-            y: y-coordinate in a units
+            center: x,y coords of the rod center in a units
             eps: relative permittivity
         """
         R = int(round(r*self.res))
-        X = int(round(x*self.res))
-        Y = int(round(y*self.res))
+        X = int(round(center[0]*self.res))
+        Y = int(round(center[1]*self.res))
         rr, cc = disk((X, Y), R, shape = self.epsr.shape)
         
         self.epsr[rr, cc] = eps
 
 
-    def Add_Rod_train(self, r, x, y):
+    def Add_Rod_train(self, r, center):
         """
         Add a single rod with radius r and rel. permittivity eps to the trainable
         element array.
 
         Args:
             r: radius of the rod in a units
-            x: x-coordinate in a units
-            y: y-coordinate in a units
+            center: x,y coords of the rod center in a units
         """
         R = int(round(r*self.res))
-        X = int(round(x*self.res))
-        Y = int(round(y*self.res))
+        X = int(round(center[0]*self.res))
+        Y = int(round(center[1]*self.res))
         rr, cc = disk((X, Y), R, shape = self.epsr.shape)
         
         train_elem = np.zeros((self.epsr.shape))
@@ -114,42 +112,38 @@ class PMMI:
         self.train_elems.append(train_elem)
 
 
-    def Add_Block(self, w, h, x, y, eps):
+    def Add_Block(self, bot_left, extent, eps):
         """
         Add a single rod with radius r and rel. permittivity eps to epsr.
 
         Args:
-            w: width (x-dir) of the block in a units
-            h: height (y-dir) of the block in a units
-            x: x-coordinate of the bottom left corner in a units
-            y: y-coordinate of the bottom left corner in a units
+            bot_left: x,y coords of the bottom left corner in a units
+            extent: width and height of the block in a units
             eps: relative permittivity of the block
         """
-        H = int(round(h*self.res))
-        W = int(round(w*self.res))
-        X = int(round(x*self.res))
-        Y = int(round(y*self.res))
+        H = int(round(extent[1]*self.res))
+        W = int(round(extent[0]*self.res))
+        X = int(round(bot_left[0]*self.res))
+        Y = int(round(bot_left[1]*self.res))
         rr, cc = rectangle((X, Y), extent = (W, H), shape = self.epsr.shape)
 
         self.epsr[rr, cc] = eps
 
 
-    def Add_Block_static(self, w, h, x, y, eps):
+    def Add_Block_static(self, bot_left, extent, eps):
         """
         Add a single rod with radius r and rel. permittivity eps to the static
         elems array.
 
         Args:
-            w: width (x-dir) of the block in a units
-            h: height (y-dir) of the block in a units
-            x: x-coordinate of the bottom left corner in a units
-            y: y-coordinate of the bottom left corner in a units
+            bot_left: x,y coords of the bottom left corner in a units
+            extent: width and height of the block in a units
             eps: relative permittivity of the block
         """
-        H = int(round(h*self.res))
-        W = int(round(w*self.res))
-        X = int(round(x*self.res))
-        Y = int(round(y*self.res))
+        H = int(round(extent[1]*self.res))
+        W = int(round(extent[0]*self.res))
+        X = int(round(bot_left[0]*self.res))
+        Y = int(round(bot_left[1]*self.res))
         rr, cc = rectangle((X, Y), extent = (W, H), shape = self.epsr.shape)
 
         self.static_elems[rr, cc] = eps
@@ -211,7 +205,7 @@ class PMMI:
         self.probes[prb_name] = (prb, omega, pol)
 
 
-    def Rod_Array(self, r, x_start, y_start, rod_eps, d_x = 1, d_y = 1):
+    def Rod_Array(self, r, xy_start, rod_eps, d_x = 1, d_y = 1):
         """
         Add a 2D rectangular rod array to epsr. All rods are spaced 1 a
         in the x and y direction by default.
@@ -227,15 +221,15 @@ class PMMI:
         """
         for i in range(rod_eps.shape[0]):
             for j in range(rod_eps.shape[1]):
-                x = x_start + i*d_x
-                y = y_start + j*d_y
+                x = xy_start[0] + i*d_x
+                y = xy_start[1] + j*d_y
                 rod_e = rod_eps[i,j]
                 if not isinstance(rod_eps[i,j], np.float64):
                     rod_e = rod_eps[i,j]._value
-                self.Add_Rod(r, x, y, rod_e)
+                self.Add_Rod(r, (x, y), rod_e)
 
 
-    def Rod_Array_train(self, r, x_start, y_start, array_dims, d_x = 1, d_y = 1):
+    def Rod_Array_train(self, r, xy_start, array_dims, d_x = 1, d_y = 1):
         """
         Add a 2D rectangular rod array to the train elems. All rods are spaced 1 a
         in the x and y direction by default.
@@ -249,174 +243,163 @@ class PMMI:
         """
         for i in range(array_dims[0]):
             for j in range(array_dims[1]):
-                x = x_start + i*d_x
-                y = y_start + j*d_y
-                self.Add_Rod_train(r, x, y)
+                x = xy_start[0] + i*d_x
+                y = xy_start[1] + j*d_y
+                self.Add_Rod_train(r, (x, y))
 
 
-    def Viz_Sim_abs(self, src_name, slices=[]):
+    def Viz_Sim_abs(self, src_names, slices=[]):
         """
-        Solve and visualize a simulation with a certain source active
+        Solve and visualize an static simulation with certain sources active
         
         Args:
-            src_name: string that indicates which source you'd like to simulate
+            src_names: list of strings that indicate which sources you'd like to simulate
         """
-        if self.sources[src_name][2] == 'hz':
-            simulation = fdfd_hz(self.sources[src_name][1], self.dl, self.epsr,\
-                         [self.Npml, self.Npml])
-            Ex, Ey, Hz = simulation.solve(self.sources[src_name][0])
-            
-            fig, ax = plt.subplots(1, 2, constrained_layout=True, figsize=(6,3))
-            ceviche.viz.abs(Hz, outline=self.epsr, ax=ax[0], cbar=False)
-            for sl in slices:
-                ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
-            ceviche.viz.abs(self.epsr, ax=ax[1], cmap='Greys');
-            plt.show()
+        fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=True, figsize=(6,3))
+        for i in range(len(src_names)):
+            if self.sources[src_names[i]][2] == 'hz':
+                simulation = fdfd_hz(self.sources[src_names[i]][1], self.dl, self.epsr,\
+                            [self.Npml, self.Npml])
+                Ex, Ey, Hz = simulation.solve(self.sources[src_names[i]][0])
+                cbar = plt.colorbar(ax[i].imshow(np.abs(Hz.T), cmap='magma'), ax=ax[i])
+                cbar.set_ticks([])
+                cbar.ax.set_ylabel('H-Field Magnitude')
+            elif self.sources[src_names[i]][2] == 'ez':
+                simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, self.epsr,\
+                            [self.Npml, self.Npml])
+                Hx, Hy, Ez = simulation.solve(self.sources[src_names[i]][0])
+                cbar = plt.colorbar(ax[i].imshow(np.abs(Ez.T), cmap='magma'), ax=ax[i])
+                cbar = plt.colorbar(ax=ax[i])
+                cbar.set_ticks([])
+                cbar.ax.set_ylabel('E-Field Magnitude')
+            else:
+                raise RuntimeError('The polarization associated with this source is\
+                                    not valid.')
+        for sl in slices:
+            ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+        cbar = plt.colorbar(ax[len(src_names)].imshow(self.epsr.T, cmap='RdGy'),\
+                            ax=ax[len(src_names)])
+        cbar.ax.set_ylabel('Relative Permittivity')
+        plt.show()
 
-            return (simulation, ax)
-
-        elif self.sources[src_name][2] == 'ez':
-            simulation = fdfd_ez(self.sources[src_name][1], self.dl, self.epsr,\
-                         [self.Npml, self.Npml])
-            Hx, Hy, Ez = simulation.solve(self.sources[src_name][0])
-
-            fig, ax = plt.subplots(1, 2, constrained_layout=True, figsize=(6,3))
-            ceviche.viz.abs(Ez, outline=self.epsr, ax=ax[0], cbar=False)
-            for sl in slices:
-                ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
-            ceviche.viz.abs(self.epsr, ax=ax[1], cmap='Greys');
-            plt.show()
-
-            return (simulation, ax)
-
-        else:
-            raise RuntimeError('The polarization associated with this source is\
-                                not valid.')
+        return (simulation, ax)
 
 
-    def Viz_Sim_fields(self, src_name, slices=[]):
+    def Viz_Sim_fields_opt(self, src_names, slices=[]):
         """
-        Solve and visualize a simulation with a certain source active
+        Solve and visualize a static simulation with certain sources active
         
         Args:
-            src_name: string that indicates which source you'd like to simulate
+            src_names: list of strings that indicate which sources you'd like to simulate
         """
-        if self.sources[src_name][2] == 'hz':
-            simulation = fdfd_hz(self.sources[src_name][1], self.dl, self.epsr,\
-                         [self.Npml, self.Npml])
-            Ex, Ey, Hz = simulation.solve(self.sources[src_name][0])
-            
-            fig, ax = plt.subplots(1, 2, constrained_layout=True, figsize=(6,3))
-            ceviche.viz.abs(Hz, outline=self.epsr, ax=ax[0], cbar=False)
-            for sl in slices:
-                ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
-            ceviche.viz.real(self.epsr, ax=ax[1], cmap='Greys');
-            plt.show()
+        fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=True, figsize=(6,3))
+        for i in range(len(src_names)):
+            if self.sources[src_names[i]][2] == 'hz':
+                simulation = fdfd_hz(self.sources[src_names[i]][1], self.dl, self.epsr,\
+                            [self.Npml, self.Npml])
+                Ex, Ey, Hz = simulation.solve(self.sources[src_names[i]][0])
+                cbar = plt.colorbar(ax[i].imshow(Hz.T, cmap='RdBu'), ax=ax[i])
+                cbar.set_ticks([])
+                cbar.ax.set_ylabel('H-Field')
+            elif self.sources[src_names[i]][2] == 'ez':
+                simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, self.epsr,\
+                            [self.Npml, self.Npml])
+                Hx, Hy, Ez = simulation.solve(self.sources[src_names[i]][0])
+                cbar = plt.colorbar(ax[i].imshow(Ez.T, cmap='RdBu'), ax=ax[i])
+                cbar = plt.colorbar(ax=ax[i])
+                cbar.set_ticks([])
+                cbar.ax.set_ylabel('E-Field')
+            else:
+                raise RuntimeError('The polarization associated with this source is\
+                                    not valid.')
+        for sl in slices:
+            ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+        cbar = plt.colorbar(ax[len(src_names)].imshow(self.epsr.T, cmap='RdGy'),\
+                            ax=ax[len(src_names)])
+        cbar.ax.set_ylabel('Relative Permittivity')
+        plt.show()
 
-            return (simulation, ax)
-
-        elif self.sources[src_name][2] == 'ez':
-            simulation = fdfd_ez(self.sources[src_name][1], self.dl, self.epsr,\
-                         [self.Npml, self.Npml])
-            Hx, Hy, Ez = simulation.solve(self.sources[src_name][0])
-
-            fig, ax = plt.subplots(1, 2, constrained_layout=True, figsize=(6,3))
-            ceviche.viz.abs(Ez, outline=self.epsr, ax=ax[0], cbar=False)
-            for sl in slices:
-                ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
-            ceviche.viz.real(self.epsr, ax=ax[1], cmap='Greys');
-            plt.show()
-
-            return (simulation, ax)
-
-        else:
-            raise RuntimeError('The polarization associated with this source is\
-                                not valid.')
+        return (simulation, ax)
 
 
-    def Viz_Sim_abs_opt(self, rho, bounds, src_name, slices=[]):
+    def Viz_Sim_abs_opt(self, rho, bounds, src_names, slices=[]):
         """
-        Solve and visualize an optimized simulation with a certain source active
+        Solve and visualize an optimized simulation with certain sources active
         
         Args:
             rho: optimal parameters
-            src_name: string that indicates which source you'd like to simulate
+            bounds: Upper and lower bounds for parameters
+            src_names: list of strings that indicate which sources you'd like to simulate
         """
-        if self.sources[src_name][2] == 'hz':
-            epsr_opt = self.Rho_Parameterization(rho, bounds)
-            simulation = fdfd_hz(self.sources[src_name][1], self.dl, epsr_opt,\
-                         [self.Npml, self.Npml])
-            Ex, Ey, Hz = simulation.solve(self.sources[src_name][0])
-            
-            fig, ax = plt.subplots(1, 2, constrained_layout=True, figsize=(6,3))
-            ceviche.viz.abs(Hz, outline=epsr_opt, ax=ax[0], cbar=False)
-            for sl in slices:
-                ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
-            ceviche.viz.abs(epsr_opt, ax=ax[1], cmap='Greys');
-            plt.show()
+        epsr_opt = self.Rho_Parameterization(rho, bounds)
+        fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=True, figsize=(6,3))
+        for i in range(len(src_names)):
+            if self.sources[src_names[i]][2] == 'hz':
+                simulation = fdfd_hz(self.sources[src_names[i]][1], self.dl, epsr_opt,\
+                            [self.Npml, self.Npml])
+                Ex, Ey, Hz = simulation.solve(self.sources[src_names[i]][0])
+                cbar = plt.colorbar(ax[i].imshow(np.abs(Hz.T), cmap='magma'), ax=ax[i])
+                cbar.set_ticks([])
+                cbar.ax.set_ylabel('H-Field Magnitude')
+            elif self.sources[src_names[i]][2] == 'ez':
+                simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, epsr_opt,\
+                            [self.Npml, self.Npml])
+                Hx, Hy, Ez = simulation.solve(self.sources[src_names[i]][0])
+                cbar = plt.colorbar(ax[i].imshow(np.abs(Ez.T), cmap='magma'), ax=ax[i])
+                cbar = plt.colorbar(ax=ax[i])
+                cbar.set_ticks([])
+                cbar.ax.set_ylabel('E-Field Magnitude')
+            else:
+                raise RuntimeError('The polarization associated with this source is\
+                                    not valid.')
+        for sl in slices:
+            ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+        cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy'),\
+                            ax=ax[len(src_names)])
+        cbar.ax.set_ylabel('Relative Permittivity')
+        plt.show()
 
-            return (simulation, ax)
-
-        elif self.sources[src_name][2] == 'ez':
-            epsr_opt = self.Rho_Parameterization(rho, bounds)
-            simulation = fdfd_ez(self.sources[src_name][1], self.dl, epsr_opt,\
-                         [self.Npml, self.Npml])
-            Hx, Hy, Ez = simulation.solve(self.sources[src_name][0])
-
-            fig, ax = plt.subplots(1, 2, constrained_layout=True, figsize=(6,3))
-            ceviche.viz.abs(Ez, outline=epsr_opt, ax=ax[0], cbar=False)
-            for sl in slices:
-                ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
-            ceviche.viz.abs(epsr_opt, ax=ax[1], cmap='Greys');
-            plt.show()
-
-            return (simulation, ax)
-
-        else:
-            raise RuntimeError('The polarization associated with this source is\
-                                not valid.')
+        return (simulation, ax)
 
 
-    def Viz_Sim_fields_opt(self, rho, bounds, src_name, slices=[]):
+    def Viz_Sim_fields_opt(self, rho, bounds, src_names, slices=[]):
         """
-        Solve and visualize a simulation with a certain source active
+        Solve and visualize an optimized simulation with certain sources active
         
         Args:
-            src_name: string that indicates which source you'd like to simulate
+            rho: optimal parameters
+            bounds: Upper and lower bounds for parameters
+            src_names: list of strings that indicate which sources you'd like to simulate
         """
-        if self.sources[src_name][2] == 'hz':
-            epsr_opt = self.Rho_Parameterization(rho, bounds)
-            simulation = fdfd_hz(self.sources[src_name][1], self.dl, epsr_opt,\
-                         [self.Npml, self.Npml])
-            Ex, Ey, Hz = simulation.solve(self.sources[src_name][0])
-            
-            fig, ax = plt.subplots(1, 2, constrained_layout=True, figsize=(6,3))
-            ceviche.viz.abs(Hz, outline=epsr_opt, ax=ax[0], cbar=False)
-            for sl in slices:
-                ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
-            ceviche.viz.real(epsr_opt, ax=ax[1], cmap='Greys');
-            plt.show()
+        epsr_opt = self.Rho_Parameterization(rho, bounds)
+        fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=True, figsize=(6,3))
+        for i in range(len(src_names)):
+            if self.sources[src_names[i]][2] == 'hz':
+                simulation = fdfd_hz(self.sources[src_names[i]][1], self.dl, epsr_opt,\
+                            [self.Npml, self.Npml])
+                Ex, Ey, Hz = simulation.solve(self.sources[src_names[i]][0])
+                cbar = plt.colorbar(ax[i].imshow(Hz.T, cmap='RdBu'), ax=ax[i])
+                cbar.set_ticks([])
+                cbar.ax.set_ylabel('H-Field')
+            elif self.sources[src_names[i]][2] == 'ez':
+                simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, epsr_opt,\
+                            [self.Npml, self.Npml])
+                Hx, Hy, Ez = simulation.solve(self.sources[src_names[i]][0])
+                cbar = plt.colorbar(ax[i].imshow(Ez.T, cmap='RdBu'), ax=ax[i])
+                cbar = plt.colorbar(ax=ax[i])
+                cbar.set_ticks([])
+                cbar.ax.set_ylabel('E-Field')
+            else:
+                raise RuntimeError('The polarization associated with this source is\
+                                    not valid.')
+        for sl in slices:
+            ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+        cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy'),\
+                            ax=ax[len(src_names)])
+        cbar.ax.set_ylabel('Relative Permittivity')
+        plt.show()
 
-            return (simulation, ax)
-
-        elif self.sources[src_name][2] == 'ez':
-            epsr_opt = self.Rho_Parameterization(rho, bounds)
-            simulation = fdfd_ez(self.sources[src_name][1], self.dl, epsr_opt,\
-                         [self.Npml, self.Npml])
-            Hx, Hy, Ez = simulation.solve(self.sources[src_name][0])
-
-            fig, ax = plt.subplots(1, 2, constrained_layout=True, figsize=(6,3))
-            ceviche.viz.abs(Ez, outline=epsr_opt, ax=ax[0], cbar=False)
-            for sl in slices:
-                ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
-            ceviche.viz.real(epsr_opt, ax=ax[1], cmap='Greys');
-            plt.show()
-
-            return (simulation, ax)
-
-        else:
-            raise RuntimeError('The polarization associated with this source is\
-                                not valid.')
+        return (simulation, ax)
 
 
     def Mask_Combine_Rho(self, train_epsr, bounds, eps_bg_des):
@@ -451,7 +434,7 @@ class PMMI:
         rho = npa.arctan(rho) / np.pi + 0.5
         train_epsr = np.zeros(self.train_elems[0].shape)
         for i in range(len(rho)):
-            train_epsr += rho[i]*self.train_elems[i] #keep this line in mind for alignment issues
+            train_epsr += rho[i]*self.train_elems[i]
 
         return train_epsr
 
@@ -470,12 +453,27 @@ class PMMI:
         return self.Mask_Combine_Rho(train_epsr, bounds, eps_bg_des)
 
 
+    def Optimize_Waveguide(self, Rho, bounds, src, prb, alpha, nepochs):
+        """
+        Optimize a waveguide PMM
+
+        Args:
+            Rho: Initial parameters
+            bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
+            src: Key for the source in the sources dict.
+            prb: Key for probe (slice in desired output waveguide) in the probes dict.
+            alpha: Adam learning rate.
+            nepochs: Number of training epochs.
+        """
+
+
     def Optimize_Multiplexer(self, Rho, bounds, src_1, src_2, prb_1, prb_2,\
                              alpha, nepochs):
         """
-        Optimize a multiplexer PMM composed of plasma rods
+        Optimize a multiplexer PMM
 
         Args:
+            Rho: Initial parameters
             bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
             src_1: Key for source 1 in the sources dict.
             src_2: Key for source 1 in the sources dict.

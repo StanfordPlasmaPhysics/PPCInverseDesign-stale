@@ -9,11 +9,11 @@ dpml = 2
 
 ## Set up domain geometry #####################################################
 PPC = PMMI(a, res, nx, ny, dpml) #Initialize PMMI object
-PPC.Add_Block_static(5, 2, 0, 9, 12.0) #Add entrance wvg
-PPC.Add_Block_static(5, 2, 15, 6, 12.0) #Bottom exit wvg
-PPC.Add_Block_static(5, 2, 15, 12, 12.0) #Top exit wvg
-rod_eps = 1.0*np.ones((10,10)) #Rod perm values
-PPC.Rod_Array_train(0.433, 5.5, 5.5, (10,10)) #Rod ppc array
+PPC.Add_Block_static((0, 9), (5, 2), 12.0) #Add entrance wvg
+PPC.Add_Block_static((15, 6), (5, 2), 12.0) #Bottom exit wvg
+PPC.Add_Block_static((15, 12), (5, 2), 12.0) #Top exit wvg
+rod_eps = -3.0*np.ones((10, 10)) #Rod perm values
+PPC.Rod_Array_train(0.433, (5.5, 5.5), (10, 10)) #Rod ppc array
 
 
 ## Set up Sources and Sim #####################################################
@@ -27,4 +27,5 @@ PPC.Add_Probe(np.array([17,11]), np.array([17,15]), w2, 'prb_2', 'hz')
 #PPC.Viz_Sim_abs('src_1')
 rod_eps_opt = PPC.Optimize_Multiplexer(rod_eps, [-20,1], 'src_1',\
                                        'src_2', 'prb_1', 'prb_2',\
-                                        0.005, 10)
+                                        0.005, 5)
+PPC.Viz_Sim_abs_opt(rod_eps_opt, [-20, 1], ['src_1', 'src_2'])
