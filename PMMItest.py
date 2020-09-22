@@ -19,13 +19,13 @@ PPC.Rod_Array_train(0.433, (5.5, 5.5), (10, 10)) #Rod ppc array
 ## Set up Sources and Sim #####################################################
 w1 = 1.0 #Source frequency
 w2 = 1.1 
-PPC.Add_Source(np.array([3,8]), np.array([3,12]), w1, 'src_1', 'hz')
-PPC.Add_Source(np.array([3,8]), np.array([3,12]), w2, 'src_2', 'hz')
-PPC.Add_Probe(np.array([17,5]), np.array([17,9]), w1, 'prb_1', 'hz')
-PPC.Add_Probe(np.array([17,11]), np.array([17,15]), w2, 'prb_2', 'hz')
+PPC.Add_Source(np.array([3,9]), np.array([3,11]), w1, 'src_1', 'hz')
+PPC.Add_Source(np.array([3,9]), np.array([3,11]), w2, 'src_2', 'hz')
+PPC.Add_Probe(np.array([17,6]), np.array([17,8]), w1, 'prb_1', 'hz')
+PPC.Add_Probe(np.array([17,12]), np.array([17,14]), w2, 'prb_2', 'hz')
 
 #PPC.Viz_Sim_abs('src_1')
 rod_eps_opt = PPC.Optimize_Multiplexer(rod_eps, [-20,1], 'src_1',\
                                        'src_2', 'prb_1', 'prb_2',\
-                                        0.005, 5)
+                                        0.005, 1)
 PPC.Viz_Sim_abs_opt(rod_eps_opt, [-20, 1], ['src_1', 'src_2'])

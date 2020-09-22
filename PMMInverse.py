@@ -12,6 +12,10 @@ import autograd.numpy as npa
 import matplotlib as mpl
 mpl.rcParams['figure.dpi']=100
 import matplotlib.pylab as plt
+plt.rc('font', family='tahoma')
+font = 18
+plt.rc('xtick', labelsize=font)
+plt.rc('ytick', labelsize=font)
 from autograd.scipy.signal import convolve as conv
 from skimage.draw import disk, rectangle
 import ceviche
@@ -255,7 +259,8 @@ class PMMI:
         Args:
             src_names: list of strings that indicate which sources you'd like to simulate
         """
-        fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=True, figsize=(6,3))
+        fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=False,\
+                               figsize=(9*len(src_names),4))
         for i in range(len(src_names)):
             if self.sources[src_names[i]][2] == 'hz':
                 simulation = fdfd_hz(self.sources[src_names[i]][1], self.dl, self.epsr,\
@@ -263,7 +268,7 @@ class PMMI:
                 Ex, Ey, Hz = simulation.solve(self.sources[src_names[i]][0])
                 cbar = plt.colorbar(ax[i].imshow(np.abs(Hz.T), cmap='magma'), ax=ax[i])
                 cbar.set_ticks([])
-                cbar.ax.set_ylabel('H-Field Magnitude')
+                cbar.ax.set_ylabel('H-Field Magnitude', fontsize=font)
             elif self.sources[src_names[i]][2] == 'ez':
                 simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, self.epsr,\
                             [self.Npml, self.Npml])
@@ -271,7 +276,7 @@ class PMMI:
                 cbar = plt.colorbar(ax[i].imshow(np.abs(Ez.T), cmap='magma'), ax=ax[i])
                 cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
-                cbar.ax.set_ylabel('E-Field Magnitude')
+                cbar.ax.set_ylabel('E-Field Magnitude', fontsize=font)
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
@@ -279,20 +284,21 @@ class PMMI:
             ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
         cbar = plt.colorbar(ax[len(src_names)].imshow(self.epsr.T, cmap='RdGy'),\
                             ax=ax[len(src_names)])
-        cbar.ax.set_ylabel('Relative Permittivity')
+        cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.show()
 
         return (simulation, ax)
 
 
-    def Viz_Sim_fields_opt(self, src_names, slices=[]):
+    def Viz_Sim_fields(self, src_names, slices=[]):
         """
         Solve and visualize a static simulation with certain sources active
         
         Args:
             src_names: list of strings that indicate which sources you'd like to simulate
         """
-        fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=True, figsize=(6,3))
+        fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=False,\
+                               figsize=(9*len(src_names),4))
         for i in range(len(src_names)):
             if self.sources[src_names[i]][2] == 'hz':
                 simulation = fdfd_hz(self.sources[src_names[i]][1], self.dl, self.epsr,\
@@ -300,7 +306,7 @@ class PMMI:
                 Ex, Ey, Hz = simulation.solve(self.sources[src_names[i]][0])
                 cbar = plt.colorbar(ax[i].imshow(Hz.T, cmap='RdBu'), ax=ax[i])
                 cbar.set_ticks([])
-                cbar.ax.set_ylabel('H-Field')
+                cbar.ax.set_ylabel('H-Field', fontsize=font)
             elif self.sources[src_names[i]][2] == 'ez':
                 simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, self.epsr,\
                             [self.Npml, self.Npml])
@@ -308,7 +314,7 @@ class PMMI:
                 cbar = plt.colorbar(ax[i].imshow(Ez.T, cmap='RdBu'), ax=ax[i])
                 cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
-                cbar.ax.set_ylabel('E-Field')
+                cbar.ax.set_ylabel('E-Field', fontsize=font)
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
@@ -316,7 +322,7 @@ class PMMI:
             ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
         cbar = plt.colorbar(ax[len(src_names)].imshow(self.epsr.T, cmap='RdGy'),\
                             ax=ax[len(src_names)])
-        cbar.ax.set_ylabel('Relative Permittivity')
+        cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.show()
 
         return (simulation, ax)
@@ -332,7 +338,8 @@ class PMMI:
             src_names: list of strings that indicate which sources you'd like to simulate
         """
         epsr_opt = self.Rho_Parameterization(rho, bounds)
-        fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=True, figsize=(6,3))
+        fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=False,\
+                               figsize=(9*len(src_names),4))
         for i in range(len(src_names)):
             if self.sources[src_names[i]][2] == 'hz':
                 simulation = fdfd_hz(self.sources[src_names[i]][1], self.dl, epsr_opt,\
@@ -340,7 +347,7 @@ class PMMI:
                 Ex, Ey, Hz = simulation.solve(self.sources[src_names[i]][0])
                 cbar = plt.colorbar(ax[i].imshow(np.abs(Hz.T), cmap='magma'), ax=ax[i])
                 cbar.set_ticks([])
-                cbar.ax.set_ylabel('H-Field Magnitude')
+                cbar.ax.set_ylabel('H-Field Magnitude', fontsize=font)
             elif self.sources[src_names[i]][2] == 'ez':
                 simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, epsr_opt,\
                             [self.Npml, self.Npml])
@@ -348,7 +355,7 @@ class PMMI:
                 cbar = plt.colorbar(ax[i].imshow(np.abs(Ez.T), cmap='magma'), ax=ax[i])
                 cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
-                cbar.ax.set_ylabel('E-Field Magnitude')
+                cbar.ax.set_ylabel('E-Field Magnitude', fontsize=font)
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
@@ -356,7 +363,7 @@ class PMMI:
             ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
         cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy'),\
                             ax=ax[len(src_names)])
-        cbar.ax.set_ylabel('Relative Permittivity')
+        cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.show()
 
         return (simulation, ax)
@@ -372,7 +379,8 @@ class PMMI:
             src_names: list of strings that indicate which sources you'd like to simulate
         """
         epsr_opt = self.Rho_Parameterization(rho, bounds)
-        fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=True, figsize=(6,3))
+        fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=False,\
+                               figsize=(9*len(src_names),4))
         for i in range(len(src_names)):
             if self.sources[src_names[i]][2] == 'hz':
                 simulation = fdfd_hz(self.sources[src_names[i]][1], self.dl, epsr_opt,\
@@ -380,7 +388,7 @@ class PMMI:
                 Ex, Ey, Hz = simulation.solve(self.sources[src_names[i]][0])
                 cbar = plt.colorbar(ax[i].imshow(Hz.T, cmap='RdBu'), ax=ax[i])
                 cbar.set_ticks([])
-                cbar.ax.set_ylabel('H-Field')
+                cbar.ax.set_ylabel('H-Field', fontsize=font)
             elif self.sources[src_names[i]][2] == 'ez':
                 simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, epsr_opt,\
                             [self.Npml, self.Npml])
@@ -388,7 +396,7 @@ class PMMI:
                 cbar = plt.colorbar(ax[i].imshow(Ez.T, cmap='RdBu'), ax=ax[i])
                 cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
-                cbar.ax.set_ylabel('E-Field')
+                cbar.ax.set_ylabel('E-Field', fontsize=font)
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
@@ -396,7 +404,7 @@ class PMMI:
             ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
         cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy'),\
                             ax=ax[len(src_names)])
-        cbar.ax.set_ylabel('Relative Permittivity')
+        cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.show()
 
         return (simulation, ax)
