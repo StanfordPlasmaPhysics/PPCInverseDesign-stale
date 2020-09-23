@@ -74,10 +74,11 @@ class PMMI:
         """
         X = int(round(bot_left[0]*self.res))
         Y = int(round(bot_left[1]*self.res))
-        W = int(round(bot_left[0]*self.res))
-        H = int(round(bot_left[1]*self.res))
+        W = int(round(extent[0]*self.res))
+        H = int(round(extent[1]*self.res))
+        rr, cc = rectangle((X, Y), extent = (W, H), shape = self.epsr.shape)
 
-        self.design_region[X:(X+W),Y:(Y+H)] = 1
+        self.design_region[rr, cc] = 1
 
 
     def Add_Rod(self, r, center, eps):
@@ -269,6 +270,7 @@ class PMMI:
                 cbar = plt.colorbar(ax[i].imshow(np.abs(Hz.T), cmap='magma'), ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('H-Field Magnitude', fontsize=font)
+                ax[i].contour(epsr_opt.T, 2, colors='w', alpha=0.5)
             elif self.sources[src_names[i]][2] == 'ez':
                 simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, self.epsr,\
                             [self.Npml, self.Npml])
@@ -277,13 +279,14 @@ class PMMI:
                 cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field Magnitude', fontsize=font)
+                ax[i].contour(epsr_opt.T, 2, colors='w', alpha=0.5)
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
         for sl in slices:
             ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
-        cbar = plt.colorbar(ax[len(src_names)].imshow(self.epsr.T, cmap='RdGy'),\
-                            ax=ax[len(src_names)])
+        cbar = plt.colorbar(ax[len(src_names)].imshow(self.epsr.T, cmap='RdGy',\
+                            vmin = bounds[0], vmax = bounds[1]), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.show()
 
@@ -307,6 +310,7 @@ class PMMI:
                 cbar = plt.colorbar(ax[i].imshow(Hz.T, cmap='RdBu'), ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('H-Field', fontsize=font)
+                ax[i].contour(epsr_opt.T, 2, colors='k', alpha=0.5)
             elif self.sources[src_names[i]][2] == 'ez':
                 simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, self.epsr,\
                             [self.Npml, self.Npml])
@@ -315,13 +319,14 @@ class PMMI:
                 cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field', fontsize=font)
+                ax[i].contour(epsr_opt.T, 2, colors='k', alpha=0.5)
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
         for sl in slices:
             ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
-        cbar = plt.colorbar(ax[len(src_names)].imshow(self.epsr.T, cmap='RdGy'),\
-                            ax=ax[len(src_names)])
+        cbar = plt.colorbar(ax[len(src_names)].imshow(self.epsr.T, cmap='RdGy',\
+                            vmin = bounds[0], vmax = bounds[1]), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.show()
 
@@ -348,6 +353,7 @@ class PMMI:
                 cbar = plt.colorbar(ax[i].imshow(np.abs(Hz.T), cmap='magma'), ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('H-Field Magnitude', fontsize=font)
+                ax[i].contour(epsr_opt.T, 2, colors='w', alpha=0.5)
             elif self.sources[src_names[i]][2] == 'ez':
                 simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, epsr_opt,\
                             [self.Npml, self.Npml])
@@ -356,13 +362,14 @@ class PMMI:
                 cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field Magnitude', fontsize=font)
+                ax[i].contour(epsr_opt.T, 2, colors='w', alpha=0.5)
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
         for sl in slices:
             ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
-        cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy'),\
-                            ax=ax[len(src_names)])
+        cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy',\
+                            vmin = bounds[0], vmax = bounds[1]), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.show()
 
@@ -386,9 +393,10 @@ class PMMI:
                 simulation = fdfd_hz(self.sources[src_names[i]][1], self.dl, epsr_opt,\
                             [self.Npml, self.Npml])
                 Ex, Ey, Hz = simulation.solve(self.sources[src_names[i]][0])
-                cbar = plt.colorbar(ax[i].imshow(Hz.T, cmap='RdBu'), ax=ax[i])
+                cbar = plt.colorbar(ax[i].imshow(np.real(Hz).T, cmap='RdBu'), ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('H-Field', fontsize=font)
+                ax[i].contour(epsr_opt.T, 2, colors='k', alpha=0.5)
             elif self.sources[src_names[i]][2] == 'ez':
                 simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, epsr_opt,\
                             [self.Npml, self.Npml])
@@ -397,20 +405,21 @@ class PMMI:
                 cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field', fontsize=font)
+                ax[i].contour(epsr_opt.T, 2, colors='k', alpha=0.5)
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
         for sl in slices:
             ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
-        cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy'),\
-                            ax=ax[len(src_names)])
+        cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy',\
+                            vmin = bounds[0], vmax = bounds[1]), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.show()
 
         return (simulation, ax)
 
 
-    def Mask_Combine_Rho(self, train_epsr, bounds, eps_bg_des):
+    def Mask_Combine_Rho(self, train_epsr, elem_locs, bounds, eps_bg_des):
         """
         Utility function for combining the design region with its trainable 
         elements and the static region
@@ -419,13 +428,14 @@ class PMMI:
             train_epsr: An np array that is the size of the domain and contains
             zeros everywhere except the location of the trainable elements where
             their scaled epsilon values are present.
+            elem_locs: similar to train_epsr but just an element selector
             bounds: Array containing the upper and lower bounds of the perm of
             the trainable elements
             eps_bg_des: Float, permittivity of the background in the design region
         """
-        train = (bounds[1] - bounds[0])*train_epsr*(train_epsr!=0).astype(np.float)\
-                + bounds[0]*(train_epsr!=0).astype(np.float)
-        design = eps_bg_des*self.design_region*(train_epsr==0).astype(np.float)
+        train = (bounds[1] - bounds[0])*train_epsr*(elem_locs!=0).astype(np.float)\
+                + bounds[0]*(elem_locs!=0).astype(np.float)
+        design = eps_bg_des*self.design_region*(elem_locs==0).astype(np.float)
         bckgd = self.static_elems*(self.design_region==0).astype(np.float)
 
         return train + design + bckgd
@@ -441,24 +451,46 @@ class PMMI:
         rho = rho.flatten()
         rho = npa.arctan(rho) / np.pi + 0.5
         train_epsr = np.zeros(self.train_elems[0].shape)
+        elem_locations = np.zeros(self.train_elems[0].shape)
         for i in range(len(rho)):
             train_epsr += rho[i]*self.train_elems[i]
+            elem_locations += self.train_elems[i]
 
-        return train_epsr
+        return train_epsr, elem_locations
+
+
+    def Eps_to_Rho(self, epsr, bounds):
+        """
+        Returns parameters associated with array of values of epsr
+
+        Args:
+            epsr: array of relative permittivity values
+        """
+        return npa.tan(((epsr-bounds[0])/(bounds[1]-bounds[0])-0.5)*np.pi)
+
+    
+    def Rho_to_Eps(self, rho, bounds):
+        """
+        Returns permittivity values associated with a parameter matrix
+
+        Args:
+            rho: array of optimization parameters
+        """
+        return (bounds[1]-bounds[0])*(npa.arctan(rho)/np.pi+0.5)+bounds[0]
 
 
     def Rho_Parameterization(self, rho, bounds, eps_bg_des = 1):
         """
-        Apply activation and create a permittivity matrix
+        Apply activation/parameterization and create a permittivity matrix
 
         Args:
             rho: parameters to be optimized
             bounds: upper and lower limits for the elements of rho
             eps_bg_des: background epsilon for the design/optimization region
         """
-        train_epsr = self.Scale_Rho(rho)
+        train_epsr, elem_locs = self.Scale_Rho(rho)
 
-        return self.Mask_Combine_Rho(train_epsr, bounds, eps_bg_des)
+        return self.Mask_Combine_Rho(train_epsr, elem_locs, bounds, eps_bg_des)
 
 
     def Optimize_Waveguide(self, Rho, bounds, src, prb, alpha, nepochs):
@@ -473,6 +505,82 @@ class PMMI:
             alpha: Adam learning rate.
             nepochs: Number of training epochs.
         """
+        if self.sources[src][2] == 'hz':
+            #Begin by running sim with initial parameters to get normalization consts
+            epsr_init = self.Rho_Parameterization(Rho, bounds)
+            sim = fdfd_hz(self.sources[src][1], self.dl, epsr_init,\
+                           [self.Npml, self.Npml])
+            Ex, _, _ = sim.solve(self.sources[src][0])
+            E0 = mode_overlap(Ex, self.probes[prb][0])
+            
+            #Define objective
+            def objective(rho):
+                """
+                Objective function called by optimizer
+
+                1) Takes the density distribution as input
+                2) Constructs epsr
+                3) Runs the simulation
+                4) Returns the overlap integral between the output wg field
+                and the desired mode field
+                """
+                rho = rho.reshape(Rho.shape)
+                epsr = self.Rho_Parameterization(rho, bounds)
+                sim.eps_r = epsr
+
+                Ex, _, _ = sim.solve(self.sources[src][0])
+
+                return mode_overlap(Ex, self.probes[prb][0])/E0
+
+            # Compute the gradient of the objective function
+            objective_jac = jacobian(objective, mode='reverse')
+
+            # Maximize the objective function using an ADAM optimizer
+            rho_optimum, _ = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs,\
+                                direction = 'max', step_size = alpha)
+
+            return rho_optimum.reshape(Rho.shape)
+
+        elif self.sources[src][2] == 'ez':
+            #Begin by running sim with initial parameters to get normalization consts
+            epsr_init = self.Rho_Parameterization(Rho, bounds)
+            sim = fdfd_ez(self.sources[src][1], self.dl, epsr_init,\
+                           [self.Npml, self.Npml])
+            _, _, Ez = sim.solve(self.sources[src][0])
+            E0 = mode_overlap(Ez, self.probes[prb][0])
+            
+            #Define objective
+            def objective(rho):
+                """
+                Objective function called by optimizer
+
+                1) Takes the density distribution as input
+                2) Constructs epsr
+                3) Runs the simulation
+                4) Returns the overlap integral between the output wg field
+                and the desired mode field
+                """
+                rho = rho.reshape(Rho.shape)
+                epsr = self.Rho_Parameterization(rho, bounds)
+                sim.eps_r = epsr
+
+                _, _, Ez = sim.solve(self.sources[src][0])
+
+                return mode_overlap(Ez, self.probes[prb][0])/E0
+
+            # Compute the gradient of the objective function
+            objective_jac = jacobian(objective, mode='reverse')
+
+            # Maximize the objective function using an ADAM optimizer
+            rho_optimum, _ = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs, bounds=bounds,\
+                                direction = 'max', step_size = alpha)
+
+            return rho_optimum.reshape(Rho.shape)
+
+        else:
+            raise RuntimeError("The source polarization is not valid.")
 
 
     def Optimize_Multiplexer(self, Rho, bounds, src_1, src_2, prb_1, prb_2,\
