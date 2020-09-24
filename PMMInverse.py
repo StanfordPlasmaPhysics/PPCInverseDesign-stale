@@ -253,7 +253,7 @@ class PMMI:
                 self.Add_Rod_train(r, (x, y))
 
 
-    def Viz_Sim_abs(self, src_names, slices=[]):
+    def Viz_Sim_abs(self, src_names, savepath, slices=[]):
         """
         Solve and visualize an static simulation with certain sources active
         
@@ -283,17 +283,18 @@ class PMMI:
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
-        for sl in slices:
-            ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+        #for sl in slices:
+        #    ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
         cbar = plt.colorbar(ax[len(src_names)].imshow(self.epsr.T, cmap='RdGy',\
                             vmin = bounds[0], vmax = bounds[1]), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
+        plt.savefig(savepath)
         plt.show()
 
         return (simulation, ax)
 
 
-    def Viz_Sim_fields(self, src_names, slices=[]):
+    def Viz_Sim_fields(self, src_names, savepath, slices=[]):
         """
         Solve and visualize a static simulation with certain sources active
         
@@ -323,17 +324,18 @@ class PMMI:
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
-        for sl in slices:
-            ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+        #for sl in slices:
+        #    ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
         cbar = plt.colorbar(ax[len(src_names)].imshow(self.epsr.T, cmap='RdGy',\
                             vmin = bounds[0], vmax = bounds[1]), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
+        plt.savefig(savepath)
         plt.show()
 
         return (simulation, ax)
 
 
-    def Viz_Sim_abs_opt(self, rho, bounds, src_names, slices=[]):
+    def Viz_Sim_abs_opt(self, rho, bounds, src_names, savepath, slices=[]):
         """
         Solve and visualize an optimized simulation with certain sources active
         
@@ -366,17 +368,18 @@ class PMMI:
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
-        for sl in slices:
-            ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+        #for sl in slices:
+        #    ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
         cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy',\
                             vmin = bounds[0], vmax = bounds[1]), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
+        plt.savefig(savepath)
         plt.show()
 
         return (simulation, ax)
 
 
-    def Viz_Sim_fields_opt(self, rho, bounds, src_names, slices=[]):
+    def Viz_Sim_fields_opt(self, rho, bounds, src_names, savepath, slices=[]):
         """
         Solve and visualize an optimized simulation with certain sources active
         
@@ -409,11 +412,12 @@ class PMMI:
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
-        for sl in slices:
-            ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+        #for sl in slices:
+        #    ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
         cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy',\
                             vmin = bounds[0], vmax = bounds[1]), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
+        plt.savefig(savepath)
         plt.show()
 
         return (simulation, ax)
@@ -688,3 +692,41 @@ class PMMI:
 
         else:
             raise RuntimeError("The two sources must have the same polarization.")
+
+
+    def Params_to_Exp(self, rho, bounds, src, nu_col):
+        """
+        Output experimental data needed to rebuild a certain design
+
+        Args:
+            rho: parameters for trainable element permittivity values
+            bounds: max and min perm values for training
+            src: key for active source in sources dict
+            nu_col: supposed collision frequency in c/a units
+        """
+        print("The lattice frequency is: ", 299792458/self.a/(10**9)," GHz")
+        print("The source frequency is: ", self.sources[src][1]/2/np.pi/(10**9), " GHz")
+        print("The plasma frequencies (GHz) necessary to achieve this design are:")
+        print(np.sqrt((1-np.real(self.Rho_to_Eps(rho, bounds)))*\
+              (self.sources[src][1]**2+(nu_col*2*np.pi*299792458/self.a)**2))/(10**9))
+
+
+    def Save_Params(self, rho, savepath):
+        """
+        Saves optimization parameters. A wrapper for np.savetxt
+
+        Args:
+            rho: parameters to be saved
+            savepath: save path. Must be csv.
+        """
+        np.savetxt(savepath, rho, delimiter=",")
+
+
+    def Read_Params(self, readpath):
+        """
+        Reads optimization paramters.
+
+        Args:
+            readpath: read path. Must be csv.
+        """
+        return np.loadtxt(readpath, delimiter=",")

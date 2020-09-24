@@ -27,7 +27,8 @@ w = 1.0 #Source frequency
 PPC.Add_Source(np.array([3,9]), np.array([3,11]), w, 'src', 'hz')
 PPC.Add_Probe(np.array([17,9]), np.array([17,11]), w, 'prb', 'hz')
 
-#PPC.Viz_Sim_abs('src_1')
 rho_opt = PPC.Optimize_Waveguide(rho, bounds, 'src', 'prb', 0.005, 5)
+PPC.Save_Params(rho_opt, 'params/10by10straightwaveguide.csv')
 print(PPC.Rho_to_Eps(rho_opt, bounds))
-PPC.Viz_Sim_abs_opt(rho_opt, bounds, ['src'])
+PPC.Params_to_Exp(rho_opt, bounds, 'src', 0)
+PPC.Viz_Sim_abs_opt(rho_opt, bounds, ['src'], 'plots/StraightWaveguide_Hz.pdf')

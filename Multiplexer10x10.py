@@ -34,5 +34,7 @@ PPC.Add_Probe(np.array([17,12]), np.array([17,14]), w2, 'prb_2', 'hz')
 rho_opt = PPC.Optimize_Multiplexer(rho, bounds, 'src_1',\
                                        'src_2', 'prb_1', 'prb_2',\
                                         0.005, 1)
+PPC.Save_Params(rho_opt, 'params/10by10multiplexer_hz.csv')
 print(PPC.Rho_to_Eps(rho_opt, bounds))
-PPC.Viz_Sim_abs_opt(rho_opt, bounds, ['src_1', 'src_2'])
+PPC.Params_to_Exp(rho_opt, bounds, 'src_1', 0)
+PPC.Viz_Sim_abs_opt(rho_opt, bounds, ['src_1', 'src_2'], 'plots/Multiplexer_Hz.pdf')
