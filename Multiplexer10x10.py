@@ -2,7 +2,7 @@ import numpy as np
 from PMMInverse import PMMI
 
 a = 0.015
-res = 10
+res = 50
 nx = 20
 ny = 20
 dpml = 2
@@ -33,7 +33,7 @@ PPC.Add_Probe(np.array([17,12]), np.array([17,14]), w2, 'prb_2', 'hz')
 #PPC.Viz_Sim_abs('src_1')
 rho_opt = PPC.Optimize_Multiplexer(rho, bounds, 'src_1',\
                                        'src_2', 'prb_1', 'prb_2',\
-                                        0.005, 1)
+                                        0.005, 300)
 PPC.Save_Params(rho_opt, 'params/10by10multiplexer_hz.csv')
 print(PPC.Rho_to_Eps(rho_opt, bounds))
 PPC.Params_to_Exp(rho_opt, bounds, 'src_1', 0)

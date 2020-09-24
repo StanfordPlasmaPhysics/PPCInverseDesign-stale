@@ -270,7 +270,7 @@ class PMMI:
                 cbar = plt.colorbar(ax[i].imshow(np.abs(Hz.T), cmap='magma'), ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('H-Field Magnitude', fontsize=font)
-                ax[i].contour(epsr_opt.T, 2, colors='w', alpha=0.5)
+                #ax[i].contour(epsr_opt.T, 2, colors='w', alpha=0.5)
             elif self.sources[src_names[i]][2] == 'ez':
                 simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, self.epsr,\
                             [self.Npml, self.Npml])
@@ -279,7 +279,7 @@ class PMMI:
                 cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field Magnitude', fontsize=font)
-                ax[i].contour(epsr_opt.T, 2, colors='w', alpha=0.5)
+                #ax[i].contour(epsr_opt.T, 2, colors='w', alpha=0.5)
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
@@ -311,7 +311,7 @@ class PMMI:
                 cbar = plt.colorbar(ax[i].imshow(Hz.T, cmap='RdBu'), ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('H-Field', fontsize=font)
-                ax[i].contour(epsr_opt.T, 2, colors='k', alpha=0.5)
+                #ax[i].contour(epsr_opt.T, 1, colors='k', alpha=0.5)
             elif self.sources[src_names[i]][2] == 'ez':
                 simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, self.epsr,\
                             [self.Npml, self.Npml])
@@ -320,7 +320,7 @@ class PMMI:
                 cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field', fontsize=font)
-                ax[i].contour(epsr_opt.T, 2, colors='k', alpha=0.5)
+                #ax[i].contour(epsr_opt.T, 1, colors='k', alpha=0.5)
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
@@ -355,7 +355,7 @@ class PMMI:
                 cbar = plt.colorbar(ax[i].imshow(np.abs(Hz.T), cmap='magma'), ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('H-Field Magnitude', fontsize=font)
-                ax[i].contour(epsr_opt.T, 2, colors='w', alpha=0.5)
+                #ax[i].contour(epsr_opt.T, 1, colors='w', alpha=0.5)
             elif self.sources[src_names[i]][2] == 'ez':
                 simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, epsr_opt,\
                             [self.Npml, self.Npml])
@@ -364,7 +364,7 @@ class PMMI:
                 cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field Magnitude', fontsize=font)
-                ax[i].contour(epsr_opt.T, 2, colors='w', alpha=0.5)
+                #ax[i].contour(epsr_opt.T, 1, colors='w', alpha=0.5)
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
@@ -399,7 +399,7 @@ class PMMI:
                 cbar = plt.colorbar(ax[i].imshow(np.real(Hz).T, cmap='RdBu'), ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('H-Field', fontsize=font)
-                ax[i].contour(epsr_opt.T, 2, colors='k', alpha=0.5)
+                #ax[i].contour(epsr_opt.T, 1, colors='k', alpha=0.5)
             elif self.sources[src_names[i]][2] == 'ez':
                 simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, epsr_opt,\
                             [self.Npml, self.Npml])
@@ -408,7 +408,7 @@ class PMMI:
                 cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field', fontsize=font)
-                ax[i].contour(epsr_opt.T, 2, colors='k', alpha=0.5)
+                #ax[i].contour(epsr_opt.T, 1, colors='k', alpha=0.5)
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
