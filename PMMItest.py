@@ -28,4 +28,4 @@ PPC.Add_Probe(np.array([17,12]), np.array([17,14]), w2, 'prb_2', 'hz')
 rod_eps_opt = PPC.Optimize_Multiplexer(rod_eps, [-20,1], 'src_1',\
                                        'src_2', 'prb_1', 'prb_2',\
                                         0.005, 1)
-PPC.Viz_Sim_abs_opt(rod_eps_opt, [-20, 1], ['src_1', 'src_2'])
+PPC.Viz_Sim_fields_opt(rod_eps_opt, [-20, 1], ['src_1', 'src_2'])
