@@ -25,6 +25,8 @@ from ceviche.modes import insert_mode
 import collections
 
 ## Utility Functions ##########################################################
+c = 299792458
+
 def mode_overlap(E1, E2):
     """
     Defines an overlap integral between the sim field and desired field
@@ -176,7 +178,7 @@ class PMMI:
         else:
             raise RuntimeError("Source needs to be 1-D")
 
-        omega = 2*np.pi*w*299792458/self.a
+        omega = 2*np.pi*w*c/self.a
         src = insert_mode(omega, self.dl, src_x, src_y, self.epsr, m = 1)
 
         self.sources[src_name] = (src, omega, pol)
@@ -204,7 +206,7 @@ class PMMI:
         else:
             raise RuntimeError("Probe needs to be 1-D")
 
-        omega = 2*np.pi*w*299792458/self.a
+        omega = 2*np.pi*w*c/self.a
         prb = insert_mode(omega, self.dl, prb_x, prb_y, self.epsr, m = 1)
 
         self.probes[prb_name] = (prb, omega, pol)
@@ -276,7 +278,6 @@ class PMMI:
                             [self.Npml, self.Npml])
                 Hx, Hy, Ez = simulation.solve(self.sources[src_names[i]][0])
                 cbar = plt.colorbar(ax[i].imshow(np.abs(Ez.T), cmap='magma'), ax=ax[i])
-                cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field Magnitude', fontsize=font)
                 #ax[i].contour(epsr_opt.T, 2, colors='w', alpha=0.5)
@@ -317,7 +318,6 @@ class PMMI:
                             [self.Npml, self.Npml])
                 Hx, Hy, Ez = simulation.solve(self.sources[src_names[i]][0])
                 cbar = plt.colorbar(ax[i].imshow(Ez.T, cmap='RdBu'), ax=ax[i])
-                cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field', fontsize=font)
                 #ax[i].contour(epsr_opt.T, 1, colors='k', alpha=0.5)
@@ -335,7 +335,7 @@ class PMMI:
         return (simulation, ax)
 
 
-    def Viz_Sim_abs_opt(self, rho, bounds, src_names, savepath, slices=[]):
+    def Viz_Sim_abs_opt(self, rho, src_names, savepath, bounds = [], plasma = False, show = True, slices=[]):
         """
         Solve and visualize an optimized simulation with certain sources active
         
@@ -343,11 +343,17 @@ class PMMI:
             rho: optimal parameters
             bounds: Upper and lower bounds for parameters
             src_names: list of strings that indicate which sources you'd like to simulate
+            savepath = save path
+            plasma: bool specifying if params map to wp
         """
-        epsr_opt = self.Rho_Parameterization(rho, bounds)
         fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=False,\
                                figsize=(9*len(src_names),4))
         for i in range(len(src_names)):
+            w_src = self.sources[src_names[i]][1]*self.a/2/np.pi/c
+            if plasma:
+                epsr_opt = self.Rho_Parameterization_wp(rho, w_src)
+            else:
+                epsr_opt = self.Rho_Parameterization(rho, bounds)
             if self.sources[src_names[i]][2] == 'hz':
                 simulation = fdfd_hz(self.sources[src_names[i]][1], self.dl, epsr_opt,\
                             [self.Npml, self.Npml])
@@ -361,7 +367,6 @@ class PMMI:
                             [self.Npml, self.Npml])
                 Hx, Hy, Ez = simulation.solve(self.sources[src_names[i]][0])
                 cbar = plt.colorbar(ax[i].imshow(np.abs(Ez.T), cmap='magma'), ax=ax[i])
-                cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field Magnitude', fontsize=font)
                 #ax[i].contour(epsr_opt.T, 1, colors='w', alpha=0.5)
@@ -371,15 +376,17 @@ class PMMI:
         #for sl in slices:
         #    ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
         cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy',\
-                            vmin = bounds[0], vmax = bounds[1]), ax=ax[len(src_names)])
+                            vmin = np.min(self.Rho_to_Eps(rho, bounds = bounds, plasma = plasma, w_src = w_src)),\
+                            vmax = np.max(epsr_opt)), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.savefig(savepath)
-        plt.show()
+        if show:
+            plt.show()
 
         return (simulation, ax)
 
 
-    def Viz_Sim_fields_opt(self, rho, bounds, src_names, savepath, slices=[]):
+    def Viz_Sim_fields_opt(self, rho, src_names, savepath, bounds = [], plasma = False, show = True, slices=[]):
         """
         Solve and visualize an optimized simulation with certain sources active
         
@@ -387,11 +394,17 @@ class PMMI:
             rho: optimal parameters
             bounds: Upper and lower bounds for parameters
             src_names: list of strings that indicate which sources you'd like to simulate
+            savepath = save path
+            plasma: bool specifying if params map to wp
         """
-        epsr_opt = self.Rho_Parameterization(rho, bounds)
         fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=False,\
                                figsize=(9*len(src_names),4))
         for i in range(len(src_names)):
+            w_src = self.sources[src_names[i]][1]*self.a/2/np.pi/c
+            if plasma:
+                epsr_opt = self.Rho_Parameterization_wp(rho, w_src)
+            else:
+                epsr_opt = self.Rho_Parameterization(rho, bounds)
             if self.sources[src_names[i]][2] == 'hz':
                 simulation = fdfd_hz(self.sources[src_names[i]][1], self.dl, epsr_opt,\
                             [self.Npml, self.Npml])
@@ -405,7 +418,6 @@ class PMMI:
                             [self.Npml, self.Npml])
                 Hx, Hy, Ez = simulation.solve(self.sources[src_names[i]][0])
                 cbar = plt.colorbar(ax[i].imshow(Ez.T, cmap='RdBu'), ax=ax[i])
-                cbar = plt.colorbar(ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field', fontsize=font)
                 #ax[i].contour(epsr_opt.T, 1, colors='k', alpha=0.5)
@@ -415,12 +427,34 @@ class PMMI:
         #for sl in slices:
         #    ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
         cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy',\
-                            vmin = bounds[0], vmax = bounds[1]), ax=ax[len(src_names)])
+                            vmin = np.min(self.Rho_to_Eps(rho, bounds = bounds, plasma = plasma, w_src = w_src)),\
+                            vmax = np.max(epsr_opt)), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.savefig(savepath)
-        plt.show()
+        if show:
+            plt.show()
 
         return (simulation, ax)
+
+
+    def Viz_Obj(self, obj, savepath, show = True):
+        """
+        Plot evolution of objective function throughout the training
+
+        Args:
+            obj: Objective array returned by the Adam Optimizer
+            savepath: Save path (string)
+        """
+        fig = plt.figure()
+        ax = plt.axes()
+        ax.plot(obj, linewidth=3.0)
+        ax.set_xlabel('Training Epoch', fontsize = font)
+        ax.set_ylabel('Objective', fontsize = font)
+        plt.savefig(savepath)
+        if show:
+            plt.show()
+
+        return ax
 
 
     def Mask_Combine_Rho(self, train_epsr, elem_locs, bounds, eps_bg_des):
@@ -445,9 +479,30 @@ class PMMI:
         return train + design + bckgd
 
 
+    def Mask_Combine_Rho_wp(self, train_epsr, elem_locs, eps_bg_des):
+        """
+        Utility function for combining the design region with its trainable 
+        elements and the static region when mapping directly from wp values
+
+        Args:
+            train_epsr: An np array that is the size of the domain and contains
+            zeros everywhere except the location of the trainable elements where
+            their scaled epsilon values are present.
+            elem_locs: similar to train_epsr but just an element selector
+            w_src: Source frequency
+            eps_bg_des: Float, permittivity of the background in the design region
+        """
+        train = (train_epsr)*(elem_locs!=0).astype(np.float)
+        design = eps_bg_des*self.design_region*(elem_locs==0).astype(np.float)
+        bckgd = self.static_elems*(self.design_region==0).astype(np.float)
+
+        return train + design + bckgd
+
+
     def Scale_Rho(self, rho):
         """
-        Applies a non-linear activation to the optimization parameters
+        Scales parameters to the space (0,1). NOTE: Runs into vanishing gradient
+        issues near the edges of the allowed values for eps
 
         Args:
             rho: Parameters being optimized
@@ -459,28 +514,82 @@ class PMMI:
         for i in range(len(rho)):
             train_epsr += rho[i]*self.train_elems[i]
             elem_locations += self.train_elems[i]
-
+        
         return train_epsr, elem_locations
 
 
-    def Eps_to_Rho(self, epsr, bounds):
+    def Scale_Rho_wp(self, rho, w_src):
+        """
+        Basically applies an absolute value to the parameters so negative plasma
+        frequencies aren't fed to the mask combine rho function
+
+        Args:
+            rho: Parameters being optimized
+        """
+        rho = rho.flatten()
+        rho = npa.subtract(1, npa.divide(npa.power(npa.abs(rho), 2), w_src**2))
+        train_epsr = np.zeros(self.train_elems[0].shape)
+        elem_locations = np.zeros(self.train_elems[0].shape)
+        for i in range(len(rho)):
+            train_epsr += rho[i]*self.train_elems[i]
+            elem_locations += self.train_elems[i]
+        
+        return train_epsr, elem_locations
+
+
+    def Eps_to_Rho(self, epsr, bounds=[], plasma = False, w_src = 1):
         """
         Returns parameters associated with array of values of epsr
 
         Args:
             epsr: array of relative permittivity values
+            bounds: Max and min perm values if directly training eps
+            plasma: boolean determining whether or not you're directly
+            optimizing wp.
+            w_src: source frequency
         """
-        return npa.tan(((epsr-bounds[0])/(bounds[1]-bounds[0])-0.5)*np.pi)
+        if plasma:
+            return self.Eps_to_Rho_wp(epsr, w_src)
+        else:
+            return npa.tan(((epsr-bounds[0])/(bounds[1]-bounds[0])-0.5)*np.pi)
 
     
-    def Rho_to_Eps(self, rho, bounds):
+    def Rho_to_Eps(self, rho, bounds=[], plasma = False, w_src = 1):
         """
         Returns permittivity values associated with a parameter matrix
 
         Args:
             rho: array of optimization parameters
         """
-        return (bounds[1]-bounds[0])*(npa.arctan(rho)/np.pi+0.5)+bounds[0]
+        if plasma:
+            return self.Rho_to_Eps_wp(rho, w_src)
+        else:
+            return (bounds[1]-bounds[0])*(npa.arctan(rho)/np.pi+0.5)+bounds[0]
+
+
+    def Eps_to_Rho_wp(self, epsr, w_src):
+        """
+        Returns parameters associated with array of values of epsr
+
+        Args:
+            epsr: array of relative permittivity values
+            w_src: source frequency
+        """
+        if np.max(epsr) >= 1:
+            raise RuntimeError("One or more of the permittivity values is invalid.\
+                    Choose relative permittivity values less than 1.")
+        return (w_src**2*(1-epsr))**0.5
+
+    
+    def Rho_to_Eps_wp(self, rho, w_src):
+        """
+        Returns permittivity values associated with a parameter matrix
+
+        Args:
+            rho: array of optimization parameters
+            w_src: source frequency
+        """
+        return 1-(npa.abs(rho))**2/w_src**2
 
 
     def Rho_Parameterization(self, rho, bounds, eps_bg_des = 1):
@@ -497,7 +606,22 @@ class PMMI:
         return self.Mask_Combine_Rho(train_epsr, elem_locs, bounds, eps_bg_des)
 
 
-    def Optimize_Waveguide(self, Rho, bounds, src, prb, alpha, nepochs):
+    def Rho_Parameterization_wp(self, rho, w_src, eps_bg_des = 1):
+        """
+        Apply scaling/parameterization and create a permittivity matrix when
+        mapping plasma frequency to permittivity
+
+        Args:
+            rho: parameters to be optimized
+            w_src: Source frequency
+            eps_bg_des: background epsilon for the design/optimization region
+        """
+        train_epsr, elem_locs = self.Scale_Rho_wp(rho, w_src)
+
+        return self.Mask_Combine_Rho_wp(train_epsr, elem_locs, eps_bg_des)
+
+
+    def Optimize_Waveguide(self, Rho, src, prb, alpha, nepochs, bounds = [], plasma = False):
         """
         Optimize a waveguide PMM
 
@@ -511,7 +635,11 @@ class PMMI:
         """
         if self.sources[src][2] == 'hz':
             #Begin by running sim with initial parameters to get normalization consts
-            epsr_init = self.Rho_Parameterization(Rho, bounds)
+            if plasma:
+                epsr_init = self.Rho_Parameterization_wp(Rho,\
+                        self.sources[src][1]*self.a/2/np.pi/c)
+            else:
+                epsr_init = self.Rho_Parameterization(Rho, bounds)
             sim = fdfd_hz(self.sources[src][1], self.dl, epsr_init,\
                            [self.Npml, self.Npml])
             Ex, _, _ = sim.solve(self.sources[src][0])
@@ -529,7 +657,11 @@ class PMMI:
                 and the desired mode field
                 """
                 rho = rho.reshape(Rho.shape)
-                epsr = self.Rho_Parameterization(rho, bounds)
+                if plasma:
+                    epsr = self.Rho_Parameterization_wp(rho,\
+                            self.sources[src][1]*self.a/2/np.pi/c)
+                else:
+                    epsr = self.Rho_Parameterization(rho, bounds)
                 sim.eps_r = epsr
 
                 Ex, _, _ = sim.solve(self.sources[src][0])
@@ -540,15 +672,19 @@ class PMMI:
             objective_jac = jacobian(objective, mode='reverse')
 
             # Maximize the objective function using an ADAM optimizer
-            rho_optimum, _ = adam_optimize(objective, Rho.flatten(),\
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
                                 objective_jac, Nsteps = nepochs,\
                                 direction = 'max', step_size = alpha)
 
-            return rho_optimum.reshape(Rho.shape)
+            return rho_optimum.reshape(Rho.shape), obj
 
         elif self.sources[src][2] == 'ez':
             #Begin by running sim with initial parameters to get normalization consts
-            epsr_init = self.Rho_Parameterization(Rho, bounds)
+            if plasma:
+                epsr_init = self.Rho_Parameterization_wp(Rho,\
+                        self.sources[src][1]*self.a/2/np.pi/c)
+            else:
+                epsr_init = self.Rho_Parameterization(Rho, bounds)
             sim = fdfd_ez(self.sources[src][1], self.dl, epsr_init,\
                            [self.Npml, self.Npml])
             _, _, Ez = sim.solve(self.sources[src][0])
@@ -566,7 +702,11 @@ class PMMI:
                 and the desired mode field
                 """
                 rho = rho.reshape(Rho.shape)
-                epsr = self.Rho_Parameterization(rho, bounds)
+                if plasma:
+                    epsr = self.Rho_Parameterization_wp(rho,\
+                            self.sources[src][1]*self.a/2/np.pi/c)
+                else:
+                    epsr = self.Rho_Parameterization(rho, bounds)
                 sim.eps_r = epsr
 
                 _, _, Ez = sim.solve(self.sources[src][0])
@@ -577,20 +717,155 @@ class PMMI:
             objective_jac = jacobian(objective, mode='reverse')
 
             # Maximize the objective function using an ADAM optimizer
-            rho_optimum, _ = adam_optimize(objective, Rho.flatten(),\
-                                objective_jac, Nsteps = nepochs, bounds=bounds,\
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs,\
                                 direction = 'max', step_size = alpha)
 
-            return rho_optimum.reshape(Rho.shape)
+            return rho_optimum.reshape(Rho.shape), obj
 
         else:
             raise RuntimeError("The source polarization is not valid.")
 
 
-    def Optimize_Multiplexer(self, Rho, bounds, src_1, src_2, prb_1, prb_2,\
-                             alpha, nepochs):
+    def Optimize_Multiplexer(self, Rho, src_1, src_2, prb_1, prb_2,\
+                             alpha, nepochs, bounds = [], plasma = False):
         """
         Optimize a multiplexer PMM
+
+        Args:
+            Rho: Initial parameters
+            bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
+            src_1: Key for source 1 in the sources dict.
+            src_2: Key for source 1 in the sources dict.
+            prb_1: Key for probe 1 in the probes dict.
+            prb_2: Key for probe 2 in the probes dict.
+            alpha: Adam learning rate.
+            nepochs: Number of training epochs.
+        """
+        if self.sources[src_1][2] == 'hz' and self.sources[src_2][2] == 'hz':
+            #Begin by running sim with initial parameters to get normalization consts
+            if plasma:
+                epsr_init1 = self.Rho_Parameterization_wp(Rho,\
+                        self.sources[src_1][1]*self.a/2/np.pi/c)
+                epsr_init2 = self.Rho_Parameterization_wp(Rho,\
+                        self.sources[src_2][1]*self.a/2/np.pi/c)
+            else:
+                epsr_init1 = self.Rho_Parameterization(Rho, bounds)
+                epsr_init2 = self.Rho_Parameterization(Rho, bounds)
+            sim1 = fdfd_hz(self.sources[src_1][1], self.dl, epsr_init1,\
+                           [self.Npml, self.Npml])
+            sim2 = fdfd_hz(self.sources[src_2][1], self.dl, epsr_init2,\
+                           [self.Npml, self.Npml])
+            Ex1, _, _ = sim1.solve(self.sources[src_1][0])
+            Ex2, _, _ = sim2.solve(self.sources[src_2][0])
+            E01 = mode_overlap(Ex1, self.probes[prb_1][0])
+            E02 = mode_overlap(Ex2, self.probes[prb_2][0])
+            
+            #Define objective
+            def objective(rho):
+                """
+                Objective function called by optimizer
+
+                1) Takes the density distribution as input
+                2) Constructs epsr
+                3) Runs the simulation
+                4) Returns the overlap integral between the output wg field
+                and the desired mode field
+                """
+                rho = rho.reshape(Rho.shape)
+                if plasma:
+                    epsr1 = self.Rho_Parameterization_wp(rho,\
+                            self.sources[src_1][1]*self.a/2/np.pi/c)
+                    epsr2 = self.Rho_Parameterization_wp(rho,\
+                            self.sources[src_2][1]*self.a/2/np.pi/c)
+                else:
+                    epsr1 = self.Rho_Parameterization(rho, bounds)
+                    epsr2 = self.Rho_Parameterization(rho, bounds)
+                sim1.eps_r = epsr1
+                sim2.eps_r = epsr2
+
+                Ex1, _, _ = sim1.solve(self.sources[src_1][0])
+                Ex2, _, _ = sim2.solve(self.sources[src_2][0])
+
+                return (mode_overlap(Ex1, self.probes[prb_1][0])/E01)*\
+                       (mode_overlap(Ex2, self.probes[prb_2][0])/E02)
+
+            # Compute the gradient of the objective function
+            objective_jac = jacobian(objective, mode='reverse')
+
+            # Maximize the objective function using an ADAM optimizer
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs, bounds=bounds,\
+                                direction = 'max', step_size = alpha)
+
+            return rho_optimum.reshape(Rho.shape), obj
+
+        elif self.sources[src_1][2] == 'ez' and self.sources[src_2][2] == 'ez':
+            #Begin by running sim with initial parameters to get normalization consts
+            if plasma:
+                epsr_init1 = self.Rho_Parameterization_wp(Rho,\
+                        self.sources[src_1][1]*self.a/2/np.pi/c)
+                epsr_init2 = self.Rho_Parameterization_wp(Rho,\
+                        self.sources[src_2][1]*self.a/2/np.pi/c)
+            else:
+                epsr_init1 = self.Rho_Parameterization(Rho, bounds)
+                epsr_init2 = self.Rho_Parameterization(Rho, bounds)
+            sim1 = fdfd_ez(self.sources[src_1][1], self.dl, epsr_init1,\
+                           [self.Npml, self.Npml])
+            sim2 = fdfd_ez(self.sources[src_2][1], self.dl, epsr_init2,\
+                           [self.Npml, self.Npml])
+            _, _, Ez1 = sim1.solve(self.sources[src_1][0])
+            _, _, Ez2 = sim2.solve(self.sources[src_2][0])
+            E01 = mode_overlap(Ez1, self.probes[prb_1][0])
+            E02 = mode_overlap(Ez2, self.probes[prb_2][0])
+            
+            #Define objective
+            def objective(rho):
+                """
+                Objective function called by optimizer
+
+                1) Takes the density distribution as input
+                2) Constructs epsr
+                3) Runs the simulation
+                4) Returns the overlap integral between the output wg field
+                and the desired mode field
+                """
+                rho = rho.reshape(Rho.shape)
+                if plasma:
+                    epsr1 = self.Rho_Parameterization_wp(rho,\
+                            self.sources[src_1][1]*self.a/2/np.pi/c)
+                    epsr2 = self.Rho_Parameterization_wp(rho,\
+                            self.sources[src_2][1]*self.a/2/np.pi/c)
+                else:
+                    epsr1 = self.Rho_Parameterization(rho, bounds)
+                    epsr2 = self.Rho_Parameterization(rho, bounds)
+                sim1.eps_r = epsr1
+                sim2.eps_r = epsr2
+
+                _, _, Ez1 = sim1.solve(self.sources[src_1][0])
+                _, _, Ez2 = sim2.solve(self.sources[src_2][0])
+
+                return (mode_overlap(Ez1, self.probes[prb_1][0])/E01)*\
+                       (mode_overlap(Ez2, self.probes[prb_2][0])/E02)
+
+            # Compute the gradient of the objective function
+            objective_jac = jacobian(objective, mode='reverse')
+
+            # Maximize the objective function using an ADAM optimizer
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs, bounds=bounds,\
+                                direction = 'max', step_size = alpha)
+
+            return rho_optimum.reshape(Rho.shape), obj
+
+        else:
+            raise RuntimeError("The two sources must have the same polarization.")
+
+
+    def Optimize_And_Gate(self, Rho, bounds, src_1, src_2, src_t, src_b, prb,\
+                             alpha, nepochs):
+        """
+        Optimize an AND gate PMM
 
         Args:
             Rho: Initial parameters
@@ -640,11 +915,11 @@ class PMMI:
             objective_jac = jacobian(objective, mode='reverse')
 
             # Maximize the objective function using an ADAM optimizer
-            rho_optimum, _ = adam_optimize(objective, Rho.flatten(),\
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
                                 objective_jac, Nsteps = nepochs, bounds=bounds,\
                                 direction = 'max', step_size = alpha)
 
-            return rho_optimum.reshape(Rho.shape)
+            return rho_optimum.reshape(Rho.shape), obj
 
         elif self.sources[src_1][2] == 'ez' and self.sources[src_2][2] == 'ez':
             #Begin by running sim with initial parameters to get normalization consts
@@ -684,17 +959,14 @@ class PMMI:
             objective_jac = jacobian(objective, mode='reverse')
 
             # Maximize the objective function using an ADAM optimizer
-            rho_optimum, _ = adam_optimize(objective, Rho.flatten(),\
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
                                 objective_jac, Nsteps = nepochs, bounds=bounds,\
                                 direction = 'max', step_size = alpha)
 
-            return rho_optimum.reshape(Rho.shape)
-
-        else:
-            raise RuntimeError("The two sources must have the same polarization.")
+            return rho_optimum.reshape(Rho.shape), obj
 
 
-    def Params_to_Exp(self, rho, bounds, src, nu_col):
+    def Params_to_Exp(self, rho, src, bounds = [], plasma = False, nu_col=0):
         """
         Output experimental data needed to rebuild a certain design
 
@@ -704,11 +976,30 @@ class PMMI:
             src: key for active source in sources dict
             nu_col: supposed collision frequency in c/a units
         """
-        print("The lattice frequency is: ", 299792458/self.a/(10**9)," GHz")
+        if plasma:
+            self.Params_to_Exp_wp(rho, src)
+        else:
+            print("The lattice frequency is: ", c/self.a/(10**9)," GHz")
+            print("The source frequency is: ", self.sources[src][1]/2/np.pi/(10**9), " GHz")
+            print("The plasma frequencies (GHz) necessary to achieve this design are:")
+            print(np.sqrt((1-np.real(self.Rho_to_Eps(rho, bounds)))*\
+                (self.sources[src][1]**2+(nu_col*2*np.pi*c/self.a)**2))/(10**9))
+
+
+    def Params_to_Exp_wp(self, rho, src, nu_col=0):
+        """
+        Output experimental data needed to rebuild a certain design
+
+        Args:
+            rho: parameters for trainable element permittivity values
+            bounds: max and min perm values for training
+            src: key for active source in sources dict
+            nu_col: supposed collision frequency in c/a units
+        """
+        print("The lattice frequency is: ", c/self.a/(10**9)," GHz")
         print("The source frequency is: ", self.sources[src][1]/2/np.pi/(10**9), " GHz")
         print("The plasma frequencies (GHz) necessary to achieve this design are:")
-        print(np.sqrt((1-np.real(self.Rho_to_Eps(rho, bounds)))*\
-              (self.sources[src][1]**2+(nu_col*2*np.pi*299792458/self.a)**2))/(10**9))
+        print(rho*c/self.a/(10**9))
 
 
     def Save_Params(self, rho, savepath):
