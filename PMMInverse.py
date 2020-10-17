@@ -255,7 +255,7 @@ class PMMI:
                 self.Add_Rod_train(r, (x, y))
 
 
-    def Viz_Sim_abs(self, src_names, savepath, slices=[]):
+    def Viz_Sim_abs(self, src_names, savepath):
         """
         Solve and visualize an static simulation with certain sources active
         
@@ -295,7 +295,7 @@ class PMMI:
         return (simulation, ax)
 
 
-    def Viz_Sim_fields(self, src_names, savepath, slices=[]):
+    def Viz_Sim_fields(self, src_names, savepath):
         """
         Solve and visualize a static simulation with certain sources active
         
@@ -335,16 +335,17 @@ class PMMI:
         return (simulation, ax)
 
 
-    def Viz_Sim_abs_opt(self, rho, src_names, savepath, bounds = [], plasma = False, show = True, slices=[]):
+    def Viz_Sim_abs_opt(self, rho, src_names, savepath, bounds = [], plasma = False, show = True):
         """
         Solve and visualize an optimized simulation with certain sources active
         
         Args:
             rho: optimal parameters
-            bounds: Upper and lower bounds for parameters
             src_names: list of strings that indicate which sources you'd like to simulate
             savepath = save path
+            bounds: Upper and lower bounds for parameters
             plasma: bool specifying if params map to wp
+            show: bool determining if the plot is shown
         """
         fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=False,\
                                figsize=(9*len(src_names),4))
@@ -386,16 +387,17 @@ class PMMI:
         return (simulation, ax)
 
 
-    def Viz_Sim_fields_opt(self, rho, src_names, savepath, bounds = [], plasma = False, show = True, slices=[]):
+    def Viz_Sim_fields_opt(self, rho, src_names, savepath, bounds = [], plasma = False, show = True):
         """
         Solve and visualize an optimized simulation with certain sources active
         
         Args:
             rho: optimal parameters
-            bounds: Upper and lower bounds for parameters
             src_names: list of strings that indicate which sources you'd like to simulate
             savepath = save path
+            bounds: Upper and lower bounds for parameters
             plasma: bool specifying if params map to wp
+            show: bool determining if the plot is shown
         """
         fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=False,\
                                figsize=(9*len(src_names),4))
@@ -545,7 +547,7 @@ class PMMI:
             epsr: array of relative permittivity values
             bounds: Max and min perm values if directly training eps
             plasma: boolean determining whether or not you're directly
-            optimizing wp.
+                    optimizing wp.
             w_src: source frequency
         """
         if plasma:
@@ -560,6 +562,10 @@ class PMMI:
 
         Args:
             rho: array of optimization parameters
+            bounds: Min and max eps values for training if directly optimizing
+                    eps
+            plasma: bool specifying if params map to wp
+            w_src: source frequency
         """
         if plasma:
             return self.Rho_to_Eps_wp(rho, w_src)
@@ -627,11 +633,12 @@ class PMMI:
 
         Args:
             Rho: Initial parameters
-            bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
             src: Key for the source in the sources dict.
             prb: Key for probe (slice in desired output waveguide) in the probes dict.
             alpha: Adam learning rate.
             nepochs: Number of training epochs.
+            bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
+            plasma: bool specifying if params map to wp
         """
         if self.sources[src][2] == 'hz':
             #Begin by running sim with initial parameters to get normalization consts
@@ -734,13 +741,14 @@ class PMMI:
 
         Args:
             Rho: Initial parameters
-            bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
             src_1: Key for source 1 in the sources dict.
             src_2: Key for source 1 in the sources dict.
             prb_1: Key for probe 1 in the probes dict.
             prb_2: Key for probe 2 in the probes dict.
             alpha: Adam learning rate.
             nepochs: Number of training epochs.
+            bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
+            plasma: bool specifying if params map to wp
         """
         if self.sources[src_1][2] == 'hz' and self.sources[src_2][2] == 'hz':
             #Begin by running sim with initial parameters to get normalization consts
@@ -760,6 +768,8 @@ class PMMI:
             Ex2, _, _ = sim2.solve(self.sources[src_2][0])
             E01 = mode_overlap(Ex1, self.probes[prb_1][0])
             E02 = mode_overlap(Ex2, self.probes[prb_2][0])
+            E01n = mode_overlap(Ex1, self.probes[prb_2][0])
+            E02n = mode_overlap(Ex2, self.probes[prb_1][0])
             
             #Define objective
             def objective(rho):
@@ -788,7 +798,9 @@ class PMMI:
                 Ex2, _, _ = sim2.solve(self.sources[src_2][0])
 
                 return (mode_overlap(Ex1, self.probes[prb_1][0])/E01)*\
-                       (mode_overlap(Ex2, self.probes[prb_2][0])/E02)
+                       (E01n/mode_overlap(Ex1, self.probes[prb_2][0]))*\
+                       (mode_overlap(Ex2, self.probes[prb_2][0])/E02)*\
+                       (E02n/mode_overlap(Ex2, self.probes[prb_1][0]))
 
             # Compute the gradient of the objective function
             objective_jac = jacobian(objective, mode='reverse')
@@ -818,6 +830,8 @@ class PMMI:
             _, _, Ez2 = sim2.solve(self.sources[src_2][0])
             E01 = mode_overlap(Ez1, self.probes[prb_1][0])
             E02 = mode_overlap(Ez2, self.probes[prb_2][0])
+            E01n = mode_overlap(Ez1, self.probes[prb_2][0])
+            E02n = mode_overlap(Ez2, self.probes[prb_1][0])
             
             #Define objective
             def objective(rho):
@@ -846,7 +860,9 @@ class PMMI:
                 _, _, Ez2 = sim2.solve(self.sources[src_2][0])
 
                 return (mode_overlap(Ez1, self.probes[prb_1][0])/E01)*\
-                       (mode_overlap(Ez2, self.probes[prb_2][0])/E02)
+                       (E01n/mode_overlap(Ez1, self.probes[prb_2][0]))*\
+                       (mode_overlap(Ez2, self.probes[prb_2][0])/E02)*\
+                       (E02n/mode_overlap(Ez2, self.probes[prb_1][0]))
 
             # Compute the gradient of the objective function
             objective_jac = jacobian(objective, mode='reverse')
@@ -862,20 +878,22 @@ class PMMI:
             raise RuntimeError("The two sources must have the same polarization.")
 
 
-    def Optimize_And_Gate(self, Rho, bounds, src_1, src_2, src_t, src_b, prb,\
-                             alpha, nepochs):
+    def Optimize_Logic_Gate(self, Rho, src_1, src_2, src_t, src_b, prb, alpha,\
+            nepochs, gate, bounds = [], plasma = False):
         """
         Optimize an AND gate PMM
 
         Args:
             Rho: Initial parameters
-            bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
             src_1: Key for source 1 in the sources dict.
             src_2: Key for source 1 in the sources dict.
             prb_1: Key for probe 1 in the probes dict.
             prb_2: Key for probe 2 in the probes dict.
             alpha: Adam learning rate.
             nepochs: Number of training epochs.
+            gate: string specifying what kind of logic you're interested in
+            bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
+            plasma: bool specifying if params map to wp
         """
         if self.sources[src_1][2] == 'hz' and self.sources[src_2][2] == 'hz':
             #Begin by running sim with initial parameters to get normalization consts
@@ -972,8 +990,9 @@ class PMMI:
 
         Args:
             rho: parameters for trainable element permittivity values
-            bounds: max and min perm values for training
             src: key for active source in sources dict
+            bounds: max and min perm values for training
+            plasma: bool specifying if params map to wp
             nu_col: supposed collision frequency in c/a units
         """
         if plasma:

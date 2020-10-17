@@ -28,14 +28,14 @@ PPC.Add_Probe(np.array([17,6]), np.array([17,8]), w1, 'prb_1', 'hz')
 PPC.Add_Probe(np.array([17,12]), np.array([17,14]), w2, 'prb_2', 'hz')
 
 rod_eps = -3.0*np.ones((10, 10)) #Rod perm values
-rho = PPC.Eps_to_Rho(epsr = rod_eps, plasma = True, w_src = w) #Initial Parameters
+rho = PPC.Eps_to_Rho(epsr = rod_eps, plasma = True, w_src = w1) #Initial Parameters
 
 rho_opt, obj = PPC.Optimize_Multiplexer(rho, 'src_1', 'src_2', 'prb_1', 'prb_2',\
                                         0.005, 3, plasma = True)
 
 ## Save parameters and visualize ##############################################
 PPC.Save_Params(rho_opt, 'params/10by10multiplexer_hz_w1_w1-1_wp.csv')
-print(PPC.Rho_to_Eps(rho = rho_opt, plasma = True, w_src = w))
+print(PPC.Rho_to_Eps(rho = rho_opt, plasma = True, w_src = w1))
 PPC.Params_to_Exp(rho = rho_opt, src = 'src_1', plasma = True)
 PPC.Viz_Sim_abs_opt(rho_opt, ['src_1', 'src_2'], 'plots/Multiplexer_Hz_w1_w1-1_wp.pdf', plasma = True)
 PPC.Viz_Obj(obj, 'plots/Multiplexer10by10_Hz_w1_w1-1_wp_obj.pdf')
