@@ -768,8 +768,6 @@ class PMMI:
             Ex2, _, _ = sim2.solve(self.sources[src_2][0])
             E01 = mode_overlap(Ex1, self.probes[prb_1][0])
             E02 = mode_overlap(Ex2, self.probes[prb_2][0])
-            E01n = mode_overlap(Ex1, self.probes[prb_2][0])
-            E02n = mode_overlap(Ex2, self.probes[prb_1][0])
             
             #Define objective
             def objective(rho):
@@ -798,9 +796,7 @@ class PMMI:
                 Ex2, _, _ = sim2.solve(self.sources[src_2][0])
 
                 return (mode_overlap(Ex1, self.probes[prb_1][0])/E01)*\
-                       (E01n/mode_overlap(Ex1, self.probes[prb_2][0]))*\
-                       (mode_overlap(Ex2, self.probes[prb_2][0])/E02)*\
-                       (E02n/mode_overlap(Ex2, self.probes[prb_1][0]))
+                       (mode_overlap(Ex2, self.probes[prb_2][0])/E02)
 
             # Compute the gradient of the objective function
             objective_jac = jacobian(objective, mode='reverse')
@@ -830,8 +826,6 @@ class PMMI:
             _, _, Ez2 = sim2.solve(self.sources[src_2][0])
             E01 = mode_overlap(Ez1, self.probes[prb_1][0])
             E02 = mode_overlap(Ez2, self.probes[prb_2][0])
-            E01n = mode_overlap(Ez1, self.probes[prb_2][0])
-            E02n = mode_overlap(Ez2, self.probes[prb_1][0])
             
             #Define objective
             def objective(rho):
@@ -860,9 +854,7 @@ class PMMI:
                 _, _, Ez2 = sim2.solve(self.sources[src_2][0])
 
                 return (mode_overlap(Ez1, self.probes[prb_1][0])/E01)*\
-                       (E01n/mode_overlap(Ez1, self.probes[prb_2][0]))*\
-                       (mode_overlap(Ez2, self.probes[prb_2][0])/E02)*\
-                       (E02n/mode_overlap(Ez2, self.probes[prb_1][0]))
+                       (mode_overlap(Ez2, self.probes[prb_2][0])/E02)
 
             # Compute the gradient of the objective function
             objective_jac = jacobian(objective, mode='reverse')
