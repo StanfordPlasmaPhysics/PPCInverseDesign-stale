@@ -30,7 +30,7 @@ PPC.Add_Probe(np.array([17,12]), np.array([17,14]), w2, 'prb_2', 'hz')
 rod_eps = -3.0*np.ones((10, 10)) #Rod perm values
 rho = PPC.Eps_to_Rho(epsr = rod_eps, plasma = True, w_src = w1) #Initial Parameters
 
-rho_opt, obj = PPC.Optimize_Multiplexer(rho, 'src_1', 'src_2', 'prb_1', 'prb_2',\
+rho_opt, obj = PPC.Optimize_Multiplexer_Penalize(rho, 'src_1', 'src_2', 'prb_1', 'prb_2',\
                                         0.005, 3, plasma = True)
 
 ## Save parameters and visualize ##############################################
