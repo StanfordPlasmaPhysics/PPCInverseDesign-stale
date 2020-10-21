@@ -335,7 +335,8 @@ class PMMI:
         return (simulation, ax)
 
 
-    def Viz_Sim_abs_opt(self, rho, src_names, savepath, bounds = [], plasma = False, show = True):
+    def Viz_Sim_abs_opt(self, rho, src_names, savepath, bounds = [], plasma = False,\
+                        show = True, mult = False):
         """
         Solve and visualize an optimized simulation with certain sources active
         
@@ -346,27 +347,37 @@ class PMMI:
             bounds: Upper and lower bounds for parameters
             plasma: bool specifying if params map to wp
             show: bool determining if the plot is shown
+            mult: bool determining if multiple sources are activated at once
         """
         fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=False,\
                                figsize=(9*len(src_names),4))
         for i in range(len(src_names)):
-            w_src = self.sources[src_names[i]][1]*self.a/2/np.pi/c
+            if mult:
+                w_src = self.sources[src_names[i][0]][1]*self.a/2/np.pi/c
+                pol = self.sources[src_names[i][0]][2]
+                w = self.sources[src_names[i][0]][1]
+                src = self.sources[src_names[i][0]][0]
+                for j in range(len(src_names[i])-1):
+                    src = src + self.sources[src_names[i][j+1]][0]
+            else:
+                w_src = self.sources[src_names[i]][1]*self.a/2/np.pi/c
+                pol = self.sources[src_names[i]][2]
+                w = self.sources[src_names[i]][1]
+                src = self.sources[src_names[i]][0]
             if plasma:
                 epsr_opt = self.Rho_Parameterization_wp(rho, w_src)
             else:
                 epsr_opt = self.Rho_Parameterization(rho, bounds)
-            if self.sources[src_names[i]][2] == 'hz':
-                simulation = fdfd_hz(self.sources[src_names[i]][1], self.dl, epsr_opt,\
-                            [self.Npml, self.Npml])
-                Ex, Ey, Hz = simulation.solve(self.sources[src_names[i]][0])
+            if pol == 'hz':
+                simulation = fdfd_hz(w, self.dl, epsr_opt, [self.Npml, self.Npml])
+                Ex, Ey, Hz = simulation.solve(src)
                 cbar = plt.colorbar(ax[i].imshow(np.abs(Hz.T), cmap='magma'), ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('H-Field Magnitude', fontsize=font)
                 #ax[i].contour(epsr_opt.T, 1, colors='w', alpha=0.5)
-            elif self.sources[src_names[i]][2] == 'ez':
-                simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, epsr_opt,\
-                            [self.Npml, self.Npml])
-                Hx, Hy, Ez = simulation.solve(self.sources[src_names[i]][0])
+            elif pol == 'ez':
+                simulation = fdfd_ez(w, self.dl, epsr_opt, [self.Npml, self.Npml])
+                Hx, Hy, Ez = simulation.solve(src)
                 cbar = plt.colorbar(ax[i].imshow(np.abs(Ez.T), cmap='magma'), ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field Magnitude', fontsize=font)
@@ -387,7 +398,8 @@ class PMMI:
         return (simulation, ax)
 
 
-    def Viz_Sim_fields_opt(self, rho, src_names, savepath, bounds = [], plasma = False, show = True):
+    def Viz_Sim_fields_opt(self, rho, src_names, savepath, bounds = [], plasma = False,\
+                           show = True, mult = False):
         """
         Solve and visualize an optimized simulation with certain sources active
         
@@ -398,27 +410,37 @@ class PMMI:
             bounds: Upper and lower bounds for parameters
             plasma: bool specifying if params map to wp
             show: bool determining if the plot is shown
+            mult: bool determining if multiple sources are activated at once
         """
         fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=False,\
                                figsize=(9*len(src_names),4))
         for i in range(len(src_names)):
-            w_src = self.sources[src_names[i]][1]*self.a/2/np.pi/c
+            if mult:
+                w_src = self.sources[src_names[i][0]][1]*self.a/2/np.pi/c
+                pol = self.sources[src_names[i][0]][2]
+                w = self.sources[src_names[i][0]][1]
+                src = self.sources[src_names[i][0]][0]
+                for j in range(len(src_names[i])-1):
+                    src = src + self.sources[src_names[i][j+1]][0]
+            else:
+                w_src = self.sources[src_names[i]][1]*self.a/2/np.pi/c
+                pol = self.sources[src_names[i]][2]
+                w = self.sources[src_names[i]][1]
+                src = self.sources[src_names[i]][0]
             if plasma:
                 epsr_opt = self.Rho_Parameterization_wp(rho, w_src)
             else:
                 epsr_opt = self.Rho_Parameterization(rho, bounds)
-            if self.sources[src_names[i]][2] == 'hz':
-                simulation = fdfd_hz(self.sources[src_names[i]][1], self.dl, epsr_opt,\
-                            [self.Npml, self.Npml])
-                Ex, Ey, Hz = simulation.solve(self.sources[src_names[i]][0])
+            if pol == 'hz':
+                simulation = fdfd_hz(w, self.dl, epsr_opt, [self.Npml, self.Npml])
+                Ex, Ey, Hz = simulation.solve(src)
                 cbar = plt.colorbar(ax[i].imshow(np.real(Hz).T, cmap='RdBu'), ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('H-Field', fontsize=font)
                 #ax[i].contour(epsr_opt.T, 1, colors='k', alpha=0.5)
-            elif self.sources[src_names[i]][2] == 'ez':
-                simulation = fdfd_ez(self.sources[src_names[i]][1], self.dl, epsr_opt,\
-                            [self.Npml, self.Npml])
-                Hx, Hy, Ez = simulation.solve(self.sources[src_names[i]][0])
+            elif pol == 'ez':
+                simulation = fdfd_ez(w, self.dl, epsr_opt, [self.Npml, self.Npml])
+                Hx, Hy, Ez = simulation.solve(src)
                 cbar = plt.colorbar(ax[i].imshow(Ez.T, cmap='RdBu'), ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field', fontsize=font)
@@ -1127,10 +1149,10 @@ class PMMI:
             raise RuntimeError("The two sources must have the same polarization.")
 
 
-    def Optimize_Logic_Gate(self, Rho, src_1, src_2, src_t, src_b, prb, alpha,\
-            nepochs, gate, bounds = [], plasma = False):
+    def Optimize_Logic_Gate(self, Rho, src_1, src_2, src_c, prb_n, prb_t, alpha,\
+            nepochs, logic, bounds = [], plasma = False):
         """
-        Optimize an AND gate PMM
+        Optimize a logic gate PMM
 
         Args:
             Rho: Initial parameters
@@ -1141,22 +1163,36 @@ class PMMI:
             prb_t: Key for the true probe in the probes dict.
             alpha: Adam learning rate.
             nepochs: Number of training epochs.
-            gate: string specifying what kind of logic you're interested in
+            logic: string specifying what kind of logic you're interested in
             bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
             plasma: bool specifying if params map to wp
         """
         if self.sources[src_1][2] == 'hz' and self.sources[src_2][2] == 'hz':
             #Begin by running sim with initial parameters to get normalization consts
-            epsr_init = self.Rho_Parameterization(Rho, bounds)
-            sim1 = fdfd_hz(self.sources[src_1][1], self.dl, epsr_init,\
-                           [self.Npml, self.Npml])
-            sim2 = fdfd_hz(self.sources[src_2][1], self.dl, epsr_init,\
-                           [self.Npml, self.Npml])
-            Ex1, _, _ = sim1.solve(self.sources[src_1][0])
-            Ex2, _, _ = sim2.solve(self.sources[src_2][0])
-            E01 = mode_overlap(Ex1, self.probes[prb_1][0])
-            E02 = mode_overlap(Ex2, self.probes[prb_2][0])
+            if plasma:
+                epsr_init = self.Rho_Parameterization_wp(Rho,\
+                        self.sources[src_1][1]*self.a/2/np.pi/c)
+            else:
+                epsr_init = self.Rho_Parameterization(Rho, bounds)
             
+            sim = fdfd_hz(self.sources[src_1][1], self.dl, epsr_init,\
+                           [self.Npml, self.Npml])
+            
+            Exc, _, _ = sim.solve(self.sources[src_c][0])
+            Ex1, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_1][0])
+            Ex2, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_2][0])
+            Ex12, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
+                                    self.sources[src_2][0])
+
+            Ec0 = mode_overlap(Exc, self.probes[prb_n][0])
+            Ec0l = mode_overlap(Exc, self.probes[prb_t][0])
+            E10 = mode_overlap(Ex1, self.probes[prb_n][0])
+            E10l = mode_overlap(Ex1, self.probes[prb_t][0])
+            E20 = mode_overlap(Ex2, self.probes[prb_n][0])
+            E20l = mode_overlap(Ex2, self.probes[prb_t][0])
+            E120 = mode_overlap(Ex12, self.probes[prb_n][0])
+            E120l = mode_overlap(Ex12, self.probes[prb_t][0])
+           
             #Define objective
             def objective(rho):
                 """
@@ -1169,15 +1205,36 @@ class PMMI:
                 and the desired mode field
                 """
                 rho = rho.reshape(Rho.shape)
-                epsr = self.Rho_Parameterization(rho, bounds)
-                sim1.eps_r = epsr
-                sim2.eps_r = epsr
+                if plasma:
+                    epsr = self.Rho_Parameterization_wp(rho,\
+                            self.sources[src_1][1]*self.a/2/np.pi/c)
+                else:
+                    epsr = self.Rho_Parameterization(rho, bounds)
+                sim.eps_r = epsr
 
-                Ex1, _, _ = sim1.solve(self.sources[src_1][0])
-                Ex2, _, _ = sim2.solve(self.sources[src_2][0])
-
-                return (mode_overlap(Ex1, self.probes[prb_1][0])/E01)*\
-                       (mode_overlap(Ex2, self.probes[prb_2][0])/E02)
+                Exc, _, _ = sim.solve(self.sources[src_c][0])
+                Ex1, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_1][0])
+                Ex2, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_2][0])
+                Ex12, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
+                                       self.sources[src_2][0])
+                if logic == 'and':
+                    return (mode_overlap(Exc, self.probes[prb_n][0])/Ec0-\
+                            mode_overlap(Exc, self.probes[prb_t][0])/Ec0l)*\
+                            (mode_overlap(Ex1, self.probes[prb_n][0])/E10-\
+                            mode_overlap(Ex1, self.probes[prb_t][0])/E10l)*\
+                            (mode_overlap(Ex2, self.probes[prb_n][0])/E20-\
+                            mode_overlap(Ex2, self.probes[prb_t][0])/E20l)*\
+                            (mode_overlap(Ex12, self.probes[prb_t][0])/E120l-\
+                            mode_overlap(Ex12, self.probes[prb_n][0])/E120)
+                elif logic == 'or':
+                    return (mode_overlap(Exc, self.probes[prb_n][0])/Ec0-\
+                            mode_overlap(Exc, self.probes[prb_t][0])/Ec0l)*\
+                            (-mode_overlap(Ex1, self.probes[prb_n][0])/E10+\
+                            mode_overlap(Ex1, self.probes[prb_t][0])/E10l)*\
+                            (-mode_overlap(Ex2, self.probes[prb_n][0])/E20+\
+                            mode_overlap(Ex2, self.probes[prb_t][0])/E20l)*\
+                            (mode_overlap(Ex12, self.probes[prb_t][0])/E120l-\
+                            mode_overlap(Ex12, self.probes[prb_n][0])/E120)
 
             # Compute the gradient of the objective function
             objective_jac = jacobian(objective, mode='reverse')
@@ -1191,15 +1248,29 @@ class PMMI:
 
         elif self.sources[src_1][2] == 'ez' and self.sources[src_2][2] == 'ez':
             #Begin by running sim with initial parameters to get normalization consts
-            epsr_init = self.Rho_Parameterization(Rho, bounds)
-            sim1 = fdfd_ez(self.sources[src_1][1], self.dl, epsr_init,\
+            if plasma:
+                epsr_init = self.Rho_Parameterization_wp(Rho,\
+                        self.sources[src_1][1]*self.a/2/np.pi/c)
+            else:
+                epsr_init = self.Rho_Parameterization(Rho, bounds)
+            
+            sim = fdfd_ez(self.sources[src_1][1], self.dl, epsr_init,\
                            [self.Npml, self.Npml])
-            sim2 = fdfd_ez(self.sources[src_2][1], self.dl, epsr_init,\
-                           [self.Npml, self.Npml])
-            _, _, Ez1 = sim1.solve(self.sources[src_1][0])
-            _, _, Ez2 = sim2.solve(self.sources[src_2][0])
-            E01 = mode_overlap(Ez1, self.probes[prb_1][0])
-            E02 = mode_overlap(Ez2, self.probes[prb_1][0])
+            
+            _, _, Ezc = sim.solve(self.sources[src_c][0])
+            _, _, Ez1 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0])
+            _, _, Ez2 = sim.solve(self.sources[src_c][0]+self.sources[src_2][0])
+            _, _, Ez12 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
+                                    self.sources[src_2][0])
+
+            Ec0 = mode_overlap(Ezc, self.probes[prb_n][0])
+            Ec0l = mode_overlap(Ezc, self.probes[prb_t][0])
+            E10 = mode_overlap(Ez1, self.probes[prb_n][0])
+            E10l = mode_overlap(Ez1, self.probes[prb_t][0])
+            E20 = mode_overlap(Ez2, self.probes[prb_n][0])
+            E20l = mode_overlap(Ez2, self.probes[prb_t][0])
+            E120 = mode_overlap(Ez12, self.probes[prb_n][0])
+            E120l = mode_overlap(Ez12, self.probes[prb_t][0])
             
             #Define objective
             def objective(rho):
@@ -1213,15 +1284,36 @@ class PMMI:
                 and the desired mode field
                 """
                 rho = rho.reshape(Rho.shape)
-                epsr = self.Rho_Parameterization(rho, bounds)
-                sim1.eps_r = epsr
-                sim2.eps_r = epsr
+                if plasma:
+                    epsr = self.Rho_Parameterization_wp(rho,\
+                            self.sources[src_1][1]*self.a/2/np.pi/c)
+                else:
+                    epsr = self.Rho_Parameterization(rho, bounds)
+                sim.eps_r = epsr
 
-                _, _, Ez1 = sim1.solve(self.sources[src_1][0])
-                _, _, Ez2 = sim2.solve(self.sources[src_2][0])
-
-                return (mode_overlap(Ez1, self.probes[prb_1][0])/E01)*\
-                       (mode_overlap(Ez2, self.probes[prb_2][0])/E02)
+                _, _, Ezc = sim.solve(self.sources[src_c][0])
+                _, _, Ez1 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0])
+                _, _, Ez2 = sim.solve(self.sources[src_c][0]+self.sources[src_2][0])
+                _, _, Ez12 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
+                                       self.sources[src_2][0])
+                if logic == 'and':
+                    return (mode_overlap(Ezc, self.probes[prb_n][0])/Ec0-\
+                            mode_overlap(Ezc, self.probes[prb_t][0])/Ec0l)*\
+                            (mode_overlap(Ez1, self.probes[prb_n][0])/E10-\
+                            mode_overlap(Ez1, self.probes[prb_t][0])/E10l)*\
+                            (mode_overlap(Ez2, self.probes[prb_n][0])/E20-\
+                            mode_overlap(Ez2, self.probes[prb_t][0])/E20l)*\
+                            (mode_overlap(Ez12, self.probes[prb_t][0])/E120l-\
+                            mode_overlap(Ez12, self.probes[prb_n][0])/E120)
+                elif logic == 'or':
+                    return (mode_overlap(Ezc, self.probes[prb_n][0])/Ec0-\
+                            mode_overlap(Ezc, self.probes[prb_t][0])/Ec0l)*\
+                            (-mode_overlap(Ez1, self.probes[prb_n][0])/E10+\
+                            mode_overlap(Ez1, self.probes[prb_t][0])/E10l)*\
+                            (-mode_overlap(Ez2, self.probes[prb_n][0])/E20+\
+                            mode_overlap(Ez2, self.probes[prb_t][0])/E20l)*\
+                            (mode_overlap(Ez12, self.probes[prb_t][0])/E120l-\
+                            mode_overlap(Ez12, self.probes[prb_n][0])/E120)
 
             # Compute the gradient of the objective function
             objective_jac = jacobian(objective, mode='reverse')
