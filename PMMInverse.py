@@ -853,7 +853,7 @@ class PMMI:
                 _, _, Ez = sim.solve(self.sources[src][0])
 
                 return mode_overlap(Ez, self.probes[prb][0])/E0-\
-                       mode_overlap(Ez, slef.probes[prbl][0])/E0l
+                       mode_overlap(Ez, self.probes[prbl][0])/E0l
 
             # Compute the gradient of the objective function
             objective_jac = jacobian(objective, mode='reverse')
@@ -1235,6 +1235,8 @@ class PMMI:
                             mode_overlap(Ex2, self.probes[prb_t][0])/E20l)*\
                             (mode_overlap(Ex12, self.probes[prb_t][0])/E120l-\
                             mode_overlap(Ex12, self.probes[prb_n][0])/E120)
+                else:
+                    raise RuntimeError("Logic not implemented yet")
 
             # Compute the gradient of the objective function
             objective_jac = jacobian(objective, mode='reverse')
@@ -1314,6 +1316,8 @@ class PMMI:
                             mode_overlap(Ez2, self.probes[prb_t][0])/E20l)*\
                             (mode_overlap(Ez12, self.probes[prb_t][0])/E120l-\
                             mode_overlap(Ez12, self.probes[prb_n][0])/E120)
+                else:
+                    raise RuntimeError("Logic not implemented yet")
 
             # Compute the gradient of the objective function
             objective_jac = jacobian(objective, mode='reverse')
