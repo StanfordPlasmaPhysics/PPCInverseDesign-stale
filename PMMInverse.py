@@ -1217,26 +1217,53 @@ class PMMI:
                 Ex2, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_2][0])
                 Ex12, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
                                        self.sources[src_2][0])
+
+                #a = mode_overlap(Exc, self.probes[prb_n][0])/Ec0
+                #b = mode_overlap(Exc, self.probes[prb_t][0])/Ec0l
+                #cee = mode_overlap(Ex1, self.probes[prb_n][0])/E10
+                #d = mode_overlap(Ex1, self.probes[prb_t][0])/E10l
+                #e = mode_overlap(Ex2, self.probes[prb_n][0])/E20
+                #f = mode_overlap(Ex2, self.probes[prb_t][0])/E20l
+                #g = mode_overlap(Ex12, self.probes[prb_n][0])/E120
+                #h = mode_overlap(Ex12, self.probes[prb_t][0])/E120l
+
                 if logic == 'and':
-                    return (mode_overlap(Exc, self.probes[prb_n][0])/Ec0-\
-                            mode_overlap(Exc, self.probes[prb_t][0])/Ec0l)*\
-                            (mode_overlap(Ex1, self.probes[prb_n][0])/E10-\
-                            mode_overlap(Ex1, self.probes[prb_t][0])/E10l)*\
-                            (mode_overlap(Ex2, self.probes[prb_n][0])/E20-\
-                            mode_overlap(Ex2, self.probes[prb_t][0])/E20l)*\
-                            (mode_overlap(Ex12, self.probes[prb_t][0])/E120l-\
-                            mode_overlap(Ex12, self.probes[prb_n][0])/E120)
+                    #obj = a*cee*e*g + b*d*e*g - a*d*e*g - b*c*e*g +\
+                    #      a*cee*f*h + b*d*f*h - a*d*f*h - b*c*f*h -\
+                    #      a*cee*f*g - b*d*f*g + a*d*f*g + b*c*f*g -\
+                    #      a*cee*e*h - b*d*e*h + a*d*e*h + b*c*e*h
+
+                    #return obj
+                    off = mode_overlap(Exc, self.probes[prb_n][0])/Ec0 -\
+                        mode_overlap(Exc, self.probes[prb_t][0])/Ec0l
+                    one = mode_overlap(Ex1, self.probes[prb_n][0])/E10 -\
+                        mode_overlap(Ex1, self.probes[prb_t][0])/E10l
+                    two = mode_overlap(Ex2, self.probes[prb_n][0])/E20 -\
+                        mode_overlap(Ex2, self.probes[prb_t][0])/E20l
+                    both = mode_overlap(Ex12, self.probes[prb_t][0])/E120l -\
+                        mode_overlap(Ex12, self.probes[prb_n][0])/E120
+                            
+                    #return (mode_overlap(Exc, self.probes[prb_n][0])/Ec0-\
+                    #        mode_overlap(Exc, self.probes[prb_t][0])/Ec0l)*\
+                    #        (mode_overlap(Ex1, self.probes[prb_n][0])/E10-\
+                    #        mode_overlap(Ex1, self.probes[prb_t][0])/E10l)*\
+                    #        (mode_overlap(Ex2, self.probes[prb_n][0])/E20-\
+                    #        mode_overlap(Ex2, self.probes[prb_t][0])/E20l)*\
+                    #        (mode_overlap(Ex12, self.probes[prb_t][0])/E120l-\
+                    #        mode_overlap(Ex12, self.probes[prb_n][0])/E120)
                 elif logic == 'or':
-                    return (mode_overlap(Exc, self.probes[prb_n][0])/Ec0-\
-                            mode_overlap(Exc, self.probes[prb_t][0])/Ec0l)*\
-                            (-mode_overlap(Ex1, self.probes[prb_n][0])/E10+\
-                            mode_overlap(Ex1, self.probes[prb_t][0])/E10l)*\
-                            (-mode_overlap(Ex2, self.probes[prb_n][0])/E20+\
-                            mode_overlap(Ex2, self.probes[prb_t][0])/E20l)*\
-                            (mode_overlap(Ex12, self.probes[prb_t][0])/E120l-\
-                            mode_overlap(Ex12, self.probes[prb_n][0])/E120)
+                    off = mode_overlap(Exc, self.probes[prb_n][0])/Ec0 -\
+                        mode_overlap(Exc, self.probes[prb_t][0])/Ec0l
+                    one = mode_overlap(Ex1, self.probes[prb_t][0])/E10l -\
+                        mode_overlap(Ex1, self.probes[prb_n][0])/E10
+                    two = mode_overlap(Ex2, self.probes[prb_t][0])/E20l -\
+                        mode_overlap(Ex2, self.probes[prb_n][0])/E20
+                    both = mode_overlap(Ex12, self.probes[prb_t][0])/E120l -\
+                        mode_overlap(Ex12, self.probes[prb_n][0])/E120
                 else:
                     raise RuntimeError("Logic not implemented yet")
+
+                return off + one + two + both
 
             # Compute the gradient of the objective function
             objective_jac = jacobian(objective, mode='reverse')

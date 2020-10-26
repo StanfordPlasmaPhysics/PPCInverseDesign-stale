@@ -37,7 +37,7 @@ rod_eps = 0.75*np.ones((10, 10)) #Rod perm values
 rho = PPC.Eps_to_Rho(epsr = rod_eps, plasma = True, w_src = w) #Initial Parameters
 
 rho_opt, obj = PPC.Optimize_Logic_Gate(rho, 'src_1', 'src_2', 'src_c', 'prb_n',\
-                                        'prb_t', 0.05, 3, 'and', plasma = True)
+                                        'prb_t', 0.005, 3, 'and', plasma = True)
 
 ## Save parameters and visualize ##############################################
 PPC.Save_Params(rho_opt, 'params/10by10logic_and_hz_w1_wp.csv')
