@@ -2,7 +2,7 @@ import numpy as np
 from PMMInverse import PMMI
 
 a = 0.015
-res = 10
+res = 50
 nx = 20
 ny = 20
 dpml = 2
@@ -25,10 +25,11 @@ PPC.Add_Source(np.array([3,9]), np.array([3,11]), w, 'src', 'ez')
 PPC.Add_Probe(np.array([17,9]), np.array([17,11]), w, 'prb', 'ez')
 PPC.Add_Probe(np.array([9,17]), np.array([11,17]), w, 'prbl', 'ez')
 
-rod_eps = 0.0*np.ones((10, 10)) #Rod perm values
+rod_eps = 0.75*np.ones((10, 10)) #Rod perm values
 rho = PPC.Eps_to_Rho(epsr = rod_eps, plasma = True, w_src = w) #Initial Parameters
 
-rho_opt, obj = PPC.Optimize_Waveguide_Penalize(rho, 'src', 'prb', 'prbl', 0.010, 3, plasma = True)
+rho_opt, obj = PPC.Optimize_Waveguide_Penalize(rho, 'src', 'prb', 'prbl',\
+                                               0.003, 600, plasma = True)
 
 ## Save parameters and visualize ##############################################
 PPC.Save_Params(rho_opt, 'params/10by10straightwaveguide_ez_w1_wp_pen.csv')

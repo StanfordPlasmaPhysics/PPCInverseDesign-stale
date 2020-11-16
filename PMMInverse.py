@@ -1059,12 +1059,12 @@ class PMMI:
                            [self.Npml, self.Npml])
             Ex1, _, _ = sim1.solve(self.sources[src_1][0])
             Ex2, _, _ = sim2.solve(self.sources[src_2][0])
-            #E01 = mode_overlap(Ex1, self.probes[prb_1][0])
-            #E02 = mode_overlap(Ex2, self.probes[prb_2][0])
+            E01 = mode_overlap(Ex1, self.probes[prb_1][0])
+            E02 = mode_overlap(Ex2, self.probes[prb_2][0])
             #E01l = mode_overlap(Ex1, self.probes[prb_2][0])
             #E02l = mode_overlap(Ex2, self.probes[prb_1][0])
-            E01 = field_mag_int(Ex1, self.probes[prb_1][3])
-            E02 = field_mag_int(Ex2, self.probes[prb_2][3])
+            #E01 = field_mag_int(Ex1, self.probes[prb_1][3])
+            #E02 = field_mag_int(Ex2, self.probes[prb_2][3])
             E01l = field_mag_int(Ex1, self.probes[prb_2][3])
             E02l = field_mag_int(Ex2, self.probes[prb_1][3])
             
@@ -1094,14 +1094,15 @@ class PMMI:
                 Ex1, _, _ = sim1.solve(self.sources[src_1][0])
                 Ex2, _, _ = sim2.solve(self.sources[src_2][0])
 
-                #return (mode_overlap(Ex1, self.probes[prb_1][0])/E01)*\
-                #       (mode_overlap(Ex2, self.probes[prb_2][0])/E02)-\
-                #       (mode_overlap(Ex1, self.probes[prb_2][0])/E01l)*\
-                #       (mode_overlap(Ex2, self.probes[prb_1][0])/E02l)
-                return (field_mag_int(Ex1, self.probes[prb_1][3])/E01)*\
-                       (field_mag_int(Ex2, self.probes[prb_2][3])/E02)-\
+                return (mode_overlap(Ex1, self.probes[prb_1][0])/E01)*\
+                       (mode_overlap(Ex2, self.probes[prb_2][0])/E02)-\
                        (field_mag_int(Ex1, self.probes[prb_2][3])/E01l)*\
                        (field_mag_int(Ex2, self.probes[prb_1][3])/E02l)
+                #       (mode_overlap(Ex1, self.probes[prb_2][0])/E01l)*\
+                #       (mode_overlap(Ex2, self.probes[prb_1][0])/E02l)
+                #return (field_mag_int(Ex1, self.probes[prb_1][3])/E01)*\
+                #       (field_mag_int(Ex2, self.probes[prb_2][3])/E02)-\
+                      
 
             # Compute the gradient of the objective function
             objective_jac = jacobian(objective, mode='reverse')
@@ -1129,12 +1130,12 @@ class PMMI:
                            [self.Npml, self.Npml])
             _, _, Ez1 = sim1.solve(self.sources[src_1][0])
             _, _, Ez2 = sim2.solve(self.sources[src_2][0])
-            #E01 = mode_overlap(Ez1, self.probes[prb_1][0])
-            #E02 = mode_overlap(Ez2, self.probes[prb_2][0])
+            E01 = mode_overlap(Ez1, self.probes[prb_1][0])
+            E02 = mode_overlap(Ez2, self.probes[prb_2][0])
             #E01l = mode_overlap(Ez1, self.probes[prb_2][0])
             #E02l = mode_overlap(Ez2, self.probes[prb_1][0])
-            E01 = field_mag_int(Ez1, self.probes[prb_1][3])
-            E02 = field_mag_int(Ez2, self.probes[prb_2][3])
+            #E01 = field_mag_int(Ez1, self.probes[prb_1][3])
+            #E02 = field_mag_int(Ez2, self.probes[prb_2][3])
             E01l = field_mag_int(Ez1, self.probes[prb_2][3])
             E02l = field_mag_int(Ez2, self.probes[prb_1][3])
             
@@ -1164,14 +1165,15 @@ class PMMI:
                 _, _, Ez1 = sim1.solve(self.sources[src_1][0])
                 _, _, Ez2 = sim2.solve(self.sources[src_2][0])
 
-                #return (mode_overlap(Ez1, self.probes[prb_1][0])/E01)*\
-                #       (mode_overlap(Ez2, self.probes[prb_2][0])/E02)-\
-                #       (mode_overlap(Ez1, self.probes[prb_2][0])/E01l)*\
-                #       (mode_overlap(Ez2, self.probes[prb_1][0])/E02l)
-                return (field_mag_int(Ez1, self.probes[prb_1][3])/E01)*\
-                       (field_mag_int(Ez2, self.probes[prb_2][3])/E02)-\
+                return (mode_overlap(Ez1, self.probes[prb_1][0])/E01)*\
+                       (mode_overlap(Ez2, self.probes[prb_2][0])/E02)-\
                        (field_mag_int(Ez1, self.probes[prb_2][3])/E01l)*\
                        (field_mag_int(Ez2, self.probes[prb_1][3])/E02l)
+                #       (mode_overlap(Ez1, self.probes[prb_2][0])/E01l)*\
+                #       (mode_overlap(Ez2, self.probes[prb_1][0])/E02l)
+                #return (field_mag_int(Ez1, self.probes[prb_1][3])/E01)*\
+                #       (field_mag_int(Ez2, self.probes[prb_2][3])/E02)-\
+                       
 
             # Compute the gradient of the objective function
             objective_jac = jacobian(objective, mode='reverse')
@@ -1230,14 +1232,14 @@ class PMMI:
             #E20l = mode_overlap(Ex2, self.probes[prb_t][0])
             #E120 = mode_overlap(Ex12, self.probes[prb_n][0])
             #E120l = mode_overlap(Ex12, self.probes[prb_t][0])
-            Ec0 = field_mag_int(Ezc, self.probes[prb_n][3])
-            Ec0l = field_mag_int(Ezc, self.probes[prb_t][3])
-            E10 = field_mag_int(Ez1, self.probes[prb_n][3])
-            E10l = field_mag_int(Ez1, self.probes[prb_t][3])
-            E20 = field_mag_int(Ez2, self.probes[prb_n][3])
-            E20l = field_mag_int(Ez2, self.probes[prb_t][3])
-            E120 = field_mag_int(Ez12, self.probes[prb_n][3])
-            E120l = field_mag_int(Ez12, self.probes[prb_t][3])
+            Ec0 = field_mag_int(Exc, self.probes[prb_n][3])
+            Ec0l = field_mag_int(Exc, self.probes[prb_t][3])
+            E10 = field_mag_int(Ex1, self.probes[prb_n][3])
+            E10l = field_mag_int(Ex1, self.probes[prb_t][3])
+            E20 = field_mag_int(Ex2, self.probes[prb_n][3])
+            E20l = field_mag_int(Ex2, self.probes[prb_t][3])
+            E120 = field_mag_int(Ex12, self.probes[prb_n][3])
+            E120l = field_mag_int(Ex12, self.probes[prb_t][3])
            
             #Define objective
             def objective(rho):
