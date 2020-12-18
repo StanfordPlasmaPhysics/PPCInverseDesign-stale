@@ -1240,6 +1240,7 @@ class PMMI:
                                        self.sources[src_2][0])
 
                 if logic == 'and':
+<<<<<<< HEAD
                     off = mode_overlap(Exc, self.probes[prb_n][0])/Ec0n -\
                         field_mag_int(Exc, self.probes[prb_t][3])/Ec0lt
                     one = mode_overlap(Ex1, self.probes[prb_n][0])/E10n -\
