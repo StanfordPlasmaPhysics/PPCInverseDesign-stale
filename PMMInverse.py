@@ -298,8 +298,7 @@ class PMMI:
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
-        #for sl in slices:
-        #    ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+                
         cbar = plt.colorbar(ax[len(src_names)].imshow(self.epsr.T, cmap='RdGy',\
                             vmin = bounds[0], vmax = bounds[1]), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
@@ -338,8 +337,7 @@ class PMMI:
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
-        #for sl in slices:
-        #    ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+                
         cbar = plt.colorbar(ax[len(src_names)].imshow(self.epsr.T, cmap='RdGy',\
                             vmin = bounds[0], vmax = bounds[1]), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
@@ -556,7 +554,7 @@ class PMMI:
         return train_epsr, elem_locations
 
 
-    def Scale_Rho_wp(self, rho, w_src):
+    def Scale_Rho_wp(self, rho, w_src, wp_max = 0):
         """
         Basically applies an absolute value to the parameters so negative plasma
         frequencies aren't fed to the mask combine rho function
@@ -565,6 +563,8 @@ class PMMI:
             rho: Parameters being optimized
         """
         rho = rho.flatten()
+        if wp_max > 0:
+            rho = (wp_max/1.5)*npa.arctan(rho/(wp_max/7.5))
         rho = npa.subtract(1, npa.divide(npa.power(npa.abs(rho), 2), w_src**2))
         train_epsr = np.zeros(self.train_elems[0].shape)
         elem_locations = np.zeros(self.train_elems[0].shape)
@@ -648,22 +648,23 @@ class PMMI:
         return self.Mask_Combine_Rho(train_epsr, elem_locs, bounds, eps_bg_des)
 
 
-    def Rho_Parameterization_wp(self, rho, w_src, eps_bg_des = 1):
+    def Rho_Parameterization_wp(self, rho, w_src, wp_max = 0, eps_bg_des = 1):
         """
         Apply scaling/parameterization and create a permittivity matrix when
         mapping plasma frequency to permittivity
 
         Args:
             rho: parameters to be optimized
-            w_src: Source frequency
+            w_src: Source frequency, non-dimensionalized
             eps_bg_des: background epsilon for the design/optimization region
         """
-        train_epsr, elem_locs = self.Scale_Rho_wp(rho, w_src)
+        train_epsr, elem_locs = self.Scale_Rho_wp(rho, w_src, wp_max)
 
         return self.Mask_Combine_Rho_wp(train_epsr, elem_locs, eps_bg_des)
 
 
-    def Optimize_Waveguide(self, Rho, src, prb, alpha, nepochs, bounds = [], plasma = False):
+    def Optimize_Waveguide(self, Rho, src, prb, alpha, nepochs, bounds = [],\
+            plasma = False, wp_max = 0):
         """
         Optimize a waveguide PMM
 
@@ -680,7 +681,7 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src][1]*self.a/2/np.pi/c)
+                        self.sources[src][1]*self.a/2/np.pi/c, wp_max)
             else:
                 epsr_init = self.Rho_Parameterization(Rho, bounds)
             sim = fdfd_hz(self.sources[src][1], self.dl, epsr_init,\
@@ -702,7 +703,7 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src][1]*self.a/2/np.pi/c)
+                            self.sources[src][1]*self.a/2/np.pi/c, wp_max)
                 else:
                     epsr = self.Rho_Parameterization(rho, bounds)
                 sim.eps_r = epsr
@@ -725,7 +726,7 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src][1]*self.a/2/np.pi/c)
+                        self.sources[src][1]*self.a/2/np.pi/c, wp_max)
             else:
                 epsr_init = self.Rho_Parameterization(Rho, bounds)
             sim = fdfd_ez(self.sources[src][1], self.dl, epsr_init,\
@@ -747,7 +748,7 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src][1]*self.a/2/np.pi/c)
+                            self.sources[src][1]*self.a/2/np.pi/c, wp_max)
                 else:
                     epsr = self.Rho_Parameterization(rho, bounds)
                 sim.eps_r = epsr
@@ -771,7 +772,7 @@ class PMMI:
 
 
     def Optimize_Waveguide_Penalize(self, Rho, src, prb, prbl, alpha, nepochs,\
-            bounds = [], plasma = False):
+            bounds = [], plasma = False, wp_max = 0):
         """
         Optimize a waveguide PMM
 
@@ -789,15 +790,13 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src][1]*self.a/2/np.pi/c)
+                        self.sources[src][1]*self.a/2/np.pi/c, wp_max)
             else:
                 epsr_init = self.Rho_Parameterization(Rho, bounds)
             sim = fdfd_hz(self.sources[src][1], self.dl, epsr_init,\
                            [self.Npml, self.Npml])
             Ex, _, _ = sim.solve(self.sources[src][0])
-            #E0 = mode_overlap(Ex, self.probes[prb][0])
-            #E0l = mode_overlap(Ex, self.probes[prbl][0])
-            E0 = field_mag_int(Ex, self.probes[prb][3])
+            E0 = mode_overlap(Ex, self.probes[prb][0])
             E0l = field_mag_int(Ex, self.probes[prbl][3])
             
             #Define objective
@@ -814,16 +813,14 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src][1]*self.a/2/np.pi/c)
+                            self.sources[src][1]*self.a/2/np.pi/c, wp_max)
                 else:
                     epsr = self.Rho_Parameterization(rho, bounds)
                 sim.eps_r = epsr
 
                 Ex, _, _ = sim.solve(self.sources[src][0])
 
-                #return mode_overlap(Ex, self.probes[prb][0])/E0-\
-                #       mode_overlap(Ex, self.probes[prbl][0])/E0l
-                return field_mag_int(Ex, self.probes[prb][3])/E0-\
+                return mode_overlap(Ex, self.probes[prb][0])/E0-\
                        field_mag_int(Ex, self.probes[prbl][3])/E0l
 
             # Compute the gradient of the objective function
@@ -840,15 +837,13 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src][1]*self.a/2/np.pi/c)
+                        self.sources[src][1]*self.a/2/np.pi/c, wp_max)
             else:
                 epsr_init = self.Rho_Parameterization(Rho, bounds)
             sim = fdfd_ez(self.sources[src][1], self.dl, epsr_init,\
                            [self.Npml, self.Npml])
             _, _, Ez = sim.solve(self.sources[src][0])
-            #E0 = mode_overlap(Ez, self.probes[prb][0])
-            #E0l = mode_overlap(Ez, self.probes[prbl][0])
-            E0 = field_mag_int(Ez, self.probes[prb][3])
+            E0 = mode_overlap(Ez, self.probes[prb][0])
             E0l = field_mag_int(Ez, self.probes[prbl][3])
             
             #Define objective
@@ -865,16 +860,14 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src][1]*self.a/2/np.pi/c)
+                            self.sources[src][1]*self.a/2/np.pi/c, wp_max)
                 else:
                     epsr = self.Rho_Parameterization(rho, bounds)
                 sim.eps_r = epsr
 
                 _, _, Ez = sim.solve(self.sources[src][0])
 
-                #return mode_overlap(Ez, self.probes[prb][0])/E0-\
-                #       mode_overlap(Ez, self.probes[prbl][0])/E0l
-                return field_mag_int(Ez, self.probes[prb][3])/E0-\
+                return mode_overlap(Ez, self.probes[prb][0])/E0-\
                        field_mag_int(Ez, self.probes[prbl][3])/E0l
 
             # Compute the gradient of the objective function
@@ -892,7 +885,8 @@ class PMMI:
 
 
     def Optimize_Multiplexer(self, Rho, src_1, src_2, prb_1, prb_2,\
-                             alpha, nepochs, bounds = [], plasma = False):
+                             alpha, nepochs, bounds = [], plasma = False,\
+                             wp_max = 0):
         """
         Optimize a multiplexer PMM
 
@@ -911,9 +905,9 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init1 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c)
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
                 epsr_init2 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_2][1]*self.a/2/np.pi/c)
+                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
             else:
                 epsr_init1 = self.Rho_Parameterization(Rho, bounds)
                 epsr_init2 = self.Rho_Parameterization(Rho, bounds)
@@ -940,9 +934,9 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr1 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c)
+                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
                     epsr2 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_2][1]*self.a/2/np.pi/c)
+                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
                 else:
                     epsr1 = self.Rho_Parameterization(rho, bounds)
                     epsr2 = self.Rho_Parameterization(rho, bounds)
@@ -969,9 +963,9 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init1 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c)
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
                 epsr_init2 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_2][1]*self.a/2/np.pi/c)
+                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
             else:
                 epsr_init1 = self.Rho_Parameterization(Rho, bounds)
                 epsr_init2 = self.Rho_Parameterization(Rho, bounds)
@@ -998,9 +992,9 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr1 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c)
+                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
                     epsr2 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_2][1]*self.a/2/np.pi/c)
+                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
                 else:
                     epsr1 = self.Rho_Parameterization(rho, bounds)
                     epsr2 = self.Rho_Parameterization(rho, bounds)
@@ -1028,7 +1022,8 @@ class PMMI:
 
 
     def Optimize_Multiplexer_Penalize(self, Rho, src_1, src_2, prb_1, prb_2,\
-                             alpha, nepochs, bounds = [], plasma = False):
+                             alpha, nepochs, bounds = [], plasma = False,\
+                             wp_max = 0):
         """
         Optimize a multiplexer PMM with leak into opposite gate penalized.
 
@@ -1047,9 +1042,9 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init1 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c)
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
                 epsr_init2 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_2][1]*self.a/2/np.pi/c)
+                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
             else:
                 epsr_init1 = self.Rho_Parameterization(Rho, bounds)
                 epsr_init2 = self.Rho_Parameterization(Rho, bounds)
@@ -1059,12 +1054,8 @@ class PMMI:
                            [self.Npml, self.Npml])
             Ex1, _, _ = sim1.solve(self.sources[src_1][0])
             Ex2, _, _ = sim2.solve(self.sources[src_2][0])
-            #E01 = mode_overlap(Ex1, self.probes[prb_1][0])
-            #E02 = mode_overlap(Ex2, self.probes[prb_2][0])
-            #E01l = mode_overlap(Ex1, self.probes[prb_2][0])
-            #E02l = mode_overlap(Ex2, self.probes[prb_1][0])
-            E01 = field_mag_int(Ex1, self.probes[prb_1][3])
-            E02 = field_mag_int(Ex2, self.probes[prb_2][3])
+            E01 = mode_overlap(Ex1, self.probes[prb_1][0])
+            E02 = mode_overlap(Ex2, self.probes[prb_2][0])
             E01l = field_mag_int(Ex1, self.probes[prb_2][3])
             E02l = field_mag_int(Ex2, self.probes[prb_1][3])
             
@@ -1082,9 +1073,9 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr1 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c)
+                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
                     epsr2 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_2][1]*self.a/2/np.pi/c)
+                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
                 else:
                     epsr1 = self.Rho_Parameterization(rho, bounds)
                     epsr2 = self.Rho_Parameterization(rho, bounds)
@@ -1094,12 +1085,8 @@ class PMMI:
                 Ex1, _, _ = sim1.solve(self.sources[src_1][0])
                 Ex2, _, _ = sim2.solve(self.sources[src_2][0])
 
-                #return (mode_overlap(Ex1, self.probes[prb_1][0])/E01)*\
-                #       (mode_overlap(Ex2, self.probes[prb_2][0])/E02)-\
-                #       (mode_overlap(Ex1, self.probes[prb_2][0])/E01l)*\
-                #       (mode_overlap(Ex2, self.probes[prb_1][0])/E02l)
-                return (field_mag_int(Ex1, self.probes[prb_1][3])/E01)*\
-                       (field_mag_int(Ex2, self.probes[prb_2][3])/E02)-\
+                return (mode_overlap(Ex1, self.probes[prb_1][0])/E01)*\
+                       (mode_overlap(Ex2, self.probes[prb_2][0])/E02)-\
                        (field_mag_int(Ex1, self.probes[prb_2][3])/E01l)*\
                        (field_mag_int(Ex2, self.probes[prb_1][3])/E02l)
 
@@ -1117,9 +1104,9 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init1 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c)
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
                 epsr_init2 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_2][1]*self.a/2/np.pi/c)
+                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
             else:
                 epsr_init1 = self.Rho_Parameterization(Rho, bounds)
                 epsr_init2 = self.Rho_Parameterization(Rho, bounds)
@@ -1129,12 +1116,8 @@ class PMMI:
                            [self.Npml, self.Npml])
             _, _, Ez1 = sim1.solve(self.sources[src_1][0])
             _, _, Ez2 = sim2.solve(self.sources[src_2][0])
-            #E01 = mode_overlap(Ez1, self.probes[prb_1][0])
-            #E02 = mode_overlap(Ez2, self.probes[prb_2][0])
-            #E01l = mode_overlap(Ez1, self.probes[prb_2][0])
-            #E02l = mode_overlap(Ez2, self.probes[prb_1][0])
-            E01 = field_mag_int(Ez1, self.probes[prb_1][3])
-            E02 = field_mag_int(Ez2, self.probes[prb_2][3])
+            E01 = mode_overlap(Ez1, self.probes[prb_1][0])
+            E02 = mode_overlap(Ez2, self.probes[prb_2][0])
             E01l = field_mag_int(Ez1, self.probes[prb_2][3])
             E02l = field_mag_int(Ez2, self.probes[prb_1][3])
             
@@ -1152,9 +1135,9 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr1 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c)
+                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
                     epsr2 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_2][1]*self.a/2/np.pi/c)
+                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
                 else:
                     epsr1 = self.Rho_Parameterization(rho, bounds)
                     epsr2 = self.Rho_Parameterization(rho, bounds)
@@ -1164,12 +1147,8 @@ class PMMI:
                 _, _, Ez1 = sim1.solve(self.sources[src_1][0])
                 _, _, Ez2 = sim2.solve(self.sources[src_2][0])
 
-                #return (mode_overlap(Ez1, self.probes[prb_1][0])/E01)*\
-                #       (mode_overlap(Ez2, self.probes[prb_2][0])/E02)-\
-                #       (mode_overlap(Ez1, self.probes[prb_2][0])/E01l)*\
-                #       (mode_overlap(Ez2, self.probes[prb_1][0])/E02l)
-                return (field_mag_int(Ez1, self.probes[prb_1][3])/E01)*\
-                       (field_mag_int(Ez2, self.probes[prb_2][3])/E02)-\
+                return (mode_overlap(Ez1, self.probes[prb_1][0])/E01)*\
+                       (mode_overlap(Ez2, self.probes[prb_2][0])/E02)-\
                        (field_mag_int(Ez1, self.probes[prb_2][3])/E01l)*\
                        (field_mag_int(Ez2, self.probes[prb_1][3])/E02l)
 
@@ -1188,7 +1167,7 @@ class PMMI:
 
 
     def Optimize_Logic_Gate(self, Rho, src_1, src_2, src_c, prb_n, prb_t, alpha,\
-            nepochs, logic, bounds = [], plasma = False):
+            nepochs, logic, bounds = [], plasma = False, wp_max = 0):
         """
         Optimize a logic gate PMM
 
@@ -1209,7 +1188,7 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c)
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
             else:
                 epsr_init = self.Rho_Parameterization(Rho, bounds)
             
@@ -1222,22 +1201,18 @@ class PMMI:
             Ex12, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
                                     self.sources[src_2][0])
 
-            #Ec0 = mode_overlap(Exc, self.probes[prb_n][0])
-            #Ec0l = mode_overlap(Exc, self.probes[prb_t][0])
-            #E10 = mode_overlap(Ex1, self.probes[prb_n][0])
-            #E10l = mode_overlap(Ex1, self.probes[prb_t][0])
-            #E20 = mode_overlap(Ex2, self.probes[prb_n][0])
-            #E20l = mode_overlap(Ex2, self.probes[prb_t][0])
-            #E120 = mode_overlap(Ex12, self.probes[prb_n][0])
-            #E120l = mode_overlap(Ex12, self.probes[prb_t][0])
-            Ec0 = field_mag_int(Ezc, self.probes[prb_n][3])
-            Ec0l = field_mag_int(Ezc, self.probes[prb_t][3])
-            E10 = field_mag_int(Ez1, self.probes[prb_n][3])
-            E10l = field_mag_int(Ez1, self.probes[prb_t][3])
-            E20 = field_mag_int(Ez2, self.probes[prb_n][3])
-            E20l = field_mag_int(Ez2, self.probes[prb_t][3])
-            E120 = field_mag_int(Ez12, self.probes[prb_n][3])
-            E120l = field_mag_int(Ez12, self.probes[prb_t][3])
+            Ec0n = mode_overlap(Exc, self.probes[prb_n][0])
+            E10n = mode_overlap(Ex1, self.probes[prb_n][0])
+            E20n = mode_overlap(Ex2, self.probes[prb_n][0])
+            E10t = mode_overlap(Ex1, self.probes[prb_t][0])
+            E20t = mode_overlap(Ex2, self.probes[prb_t][0])
+            E120t = mode_overlap(Ex12, self.probes[prb_t][0])
+            E10ln = field_mag_int(Ex1, self.probes[prb_n][3])
+            E20ln = field_mag_int(Ex2, self.probes[prb_n][3])
+            E120ln = field_mag_int(Ex12, self.probes[prb_n][3])
+            Ec0lt = field_mag_int(Exc, self.probes[prb_t][3])
+            E10lt = field_mag_int(Ex1, self.probes[prb_t][3])
+            E20lt = field_mag_int(Ex2, self.probes[prb_t][3])
            
             #Define objective
             def objective(rho):
@@ -1253,7 +1228,7 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c)
+                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
                 else:
                     epsr = self.Rho_Parameterization(rho, bounds)
                 sim.eps_r = epsr
@@ -1265,40 +1240,24 @@ class PMMI:
                                        self.sources[src_2][0])
 
                 if logic == 'and':
-                    #off = mode_overlap(Exc, self.probes[prb_n][0])/Ec0 -\
-                    #    mode_overlap(Exc, self.probes[prb_t][0])/Ec0l
-                    #one = mode_overlap(Ex1, self.probes[prb_n][0])/E10 -\
-                    #    mode_overlap(Ex1, self.probes[prb_t][0])/E10l
-                    #two = mode_overlap(Ex2, self.probes[prb_n][0])/E20 -\
-                    #    mode_overlap(Ex2, self.probes[prb_t][0])/E20l
-                    #both = 3*mode_overlap(Ex12, self.probes[prb_t][0])/E120l -\
-                    #    3*mode_overlap(Ex12, self.probes[prb_n][0])/E120
-                    off = field_mag_int(Exc, self.probes[prb_n][3])/Ec0 -\
-                        field_mag_int(Exc, self.probes[prb_t][3])/Ec0l
-                    one = field_mag_int(Ex1, self.probes[prb_n][3])/E10 -\
-                        field_mag_int(Ex1, self.probes[prb_t][3])/E10l
-                    two = field_mag_int(Ex2, self.probes[prb_n][3])/E20 -\
-                        field_mag_int(Ex2, self.probes[prb_t][3])/E20l
-                    both = 3*field_mag_int(Ex12, self.probes[prb_t][3])/E120l -\
-                        3*field_mag_int(Ex12, self.probes[prb_n][3])/E120
+                    off = mode_overlap(Exc, self.probes[prb_n][0])/Ec0n -\
+                        field_mag_int(Exc, self.probes[prb_t][3])/Ec0lt
+                    one = mode_overlap(Ex1, self.probes[prb_n][0])/E10n -\
+                        field_mag_int(Ex1, self.probes[prb_t][3])/E10lt
+                    two = mode_overlap(Ex2, self.probes[prb_n][0])/E20n -\
+                        field_mag_int(Ex2, self.probes[prb_t][3])/E20lt
+                    both = 3*mode_overlap(Ex12, self.probes[prb_t][0])/E120lt -\
+                        3*field_mag_int(Ex12, self.probes[prb_n][3])/E120n
                             
                 elif logic == 'or':
-                    #off = 3*mode_overlap(Exc, self.probes[prb_n][0])/Ec0 -\
-                    #    3*mode_overlap(Exc, self.probes[prb_t][0])/Ec0l
-                    #one = mode_overlap(Ex1, self.probes[prb_t][0])/E10l -\
-                    #    mode_overlap(Ex1, self.probes[prb_n][0])/E10
-                    #two = mode_overlap(Ex2, self.probes[prb_t][0])/E20l -\
-                    #    mode_overlap(Ex2, self.probes[prb_n][0])/E20
-                    #both = mode_overlap(Ex12, self.probes[prb_t][0])/E120l -\
-                    #    mode_overlap(Ex12, self.probes[prb_n][0])/E120
-                    off = 3*field_mag_int(Exc, self.probes[prb_n][3])/Ec0 -\
-                        3*field_mag_int(Exc, self.probes[prb_t][3])/Ec0l
-                    one = field_mag_int(Ex1, self.probes[prb_t][3])/E10l -\
-                        field_mag_int(Ex1, self.probes[prb_n][3])/E10
-                    two = field_mag_int(Ex2, self.probes[prb_t][3])/E20l -\
-                        field_mag_int(Ex2, self.probes[prb_n][3])/E20
-                    both = field_mag_int(Ex12, self.probes[prb_t][3])/E120l -\
-                        field_mag_int(Ex12, self.probes[prb_n][3])/E120
+                    off = 3*mode_overlap(Exc, self.probes[prb_n][0])/Ec0n -\
+                        3*field_mag_int(Exc, self.probes[prb_t][3])/Ec0lt
+                    one = mode_overlap(Ex1, self.probes[prb_t][0])/E10t -\
+                        field_mag_int(Ex1, self.probes[prb_n][3])/E10ln
+                    two = mode_overlap(Ex2, self.probes[prb_t][0])/E20t -\
+                        field_mag_int(Ex2, self.probes[prb_n][3])/E20ln
+                    both = mode_overlap(Ex12, self.probes[prb_t][0])/E120t -\
+                        field_mag_int(Ex12, self.probes[prb_n][3])/E120ln
 
                 else:
                     raise RuntimeError("Logic not implemented yet")
@@ -1319,7 +1278,7 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c)
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
             else:
                 epsr_init = self.Rho_Parameterization(Rho, bounds)
             
@@ -1332,22 +1291,18 @@ class PMMI:
             _, _, Ez12 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
                                     self.sources[src_2][0])
 
-            #Ec0 = mode_overlap(Ezc, self.probes[prb_n][0])
-            #Ec0l = mode_overlap(Ezc, self.probes[prb_t][0])
-            #E10 = mode_overlap(Ez1, self.probes[prb_n][0])
-            #E10l = mode_overlap(Ez1, self.probes[prb_t][0])
-            #E20 = mode_overlap(Ez2, self.probes[prb_n][0])
-            #E20l = mode_overlap(Ez2, self.probes[prb_t][0])
-            #E120 = mode_overlap(Ez12, self.probes[prb_n][0])
-            #E120l = mode_overlap(Ez12, self.probes[prb_t][0])
-            Ec0 = field_mag_int(Ezc, self.probes[prb_n][3])
-            Ec0l = field_mag_int(Ezc, self.probes[prb_t][3])
-            E10 = field_mag_int(Ez1, self.probes[prb_n][3])
-            E10l = field_mag_int(Ez1, self.probes[prb_t][3])
-            E20 = field_mag_int(Ez2, self.probes[prb_n][3])
-            E20l = field_mag_int(Ez2, self.probes[prb_t][3])
-            E120 = field_mag_int(Ez12, self.probes[prb_n][3])
-            E120l = field_mag_int(Ez12, self.probes[prb_t][3])
+            Ec0n = mode_overlap(Ezc, self.probes[prb_n][0])
+            E10n = mode_overlap(Ez1, self.probes[prb_n][0])
+            E20n = mode_overlap(Ez2, self.probes[prb_n][0])
+            E10t = mode_overlap(Ez1, self.probes[prb_t][0])
+            E20t = mode_overlap(Ez2, self.probes[prb_t][0])
+            E120t = mode_overlap(Ez12, self.probes[prb_t][0])
+            E10ln = field_mag_int(Ez1, self.probes[prb_n][3])
+            E20ln = field_mag_int(Ez2, self.probes[prb_n][3])
+            E120ln = field_mag_int(Ez12, self.probes[prb_n][3])
+            Ec0lt = field_mag_int(Ezc, self.probes[prb_t][3])
+            E10lt = field_mag_int(Ez1, self.probes[prb_t][3])
+            E20lt = field_mag_int(Ez2, self.probes[prb_t][3])
             
             #Define objective
             def objective(rho):
@@ -1363,7 +1318,7 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c)
+                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
                 else:
                     epsr = self.Rho_Parameterization(rho, bounds)
                 sim.eps_r = epsr
@@ -1373,42 +1328,31 @@ class PMMI:
                 _, _, Ez2 = sim.solve(self.sources[src_c][0]+self.sources[src_2][0])
                 _, _, Ez12 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
                                        self.sources[src_2][0])
+
                 if logic == 'and':
-                    #return mode_overlap(Ezc, self.probes[prb_n][0])/Ec0-\
-                    #        mode_overlap(Ezc, self.probes[prb_t][0])/Ec0l+\
-                    #        mode_overlap(Ez1, self.probes[prb_n][0])/E10-\
-                    #        mode_overlap(Ez1, self.probes[prb_t][0])/E10l+\
-                    #        mode_overlap(Ez2, self.probes[prb_n][0])/E20-\
-                    #        mode_overlap(Ez2, self.probes[prb_t][0])/E20l+\
-                    #        3*mode_overlap(Ez12, self.probes[prb_t][0])/E120l-\
-                    #        3*mode_overlap(Ez12, self.probes[prb_n][0])/E120
-                    return field_mag_int(Ezc, self.probes[prb_n][3])/Ec0-\
-                            field_mag_int(Ezc, self.probes[prb_t][3])/Ec0l+\
-                            field_mag_int(Ez1, self.probes[prb_n][3])/E10-\
-                            field_mag_int(Ez1, self.probes[prb_t][3])/E10l+\
-                            field_mag_int(Ez2, self.probes[prb_n][3])/E20-\
-                            field_mag_int(Ez2, self.probes[prb_t][3])/E20l+\
-                            3*field_mag_int(Ez12, self.probes[prb_t][3])/E120l-\
-                            3*field_mag_int(Ez12, self.probes[prb_n][3])/E120
+                    off = 6*mode_overlap(Ezc, self.probes[prb_n][0])/Ec0n -\
+                        field_mag_int(Ezc, self.probes[prb_t][3])/Ec0lt
+                    one = mode_overlap(Ez1, self.probes[prb_n][0])/E10n -\
+                        150*field_mag_int(Ez1, self.probes[prb_t][3])/E10lt
+                    two = mode_overlap(Ez2, self.probes[prb_n][0])/E20n -\
+                        100*field_mag_int(Ez2, self.probes[prb_t][3])/E20lt
+                    both = 7*mode_overlap(Ez12, self.probes[prb_t][0])/E120lt -\
+                        100*field_mag_int(Ez12, self.probes[prb_n][3])/E120n
+                            
                 elif logic == 'or':
-                    #return 3*mode_overlap(Ezc, self.probes[prb_n][0])/Ec0-\
-                    #        3*mode_overlap(Ezc, self.probes[prb_t][0])/Ec0l-\
-                    #        mode_overlap(Ez1, self.probes[prb_n][0])/E10+\
-                    #        mode_overlap(Ez1, self.probes[prb_t][0])/E10l-\
-                    #        mode_overlap(Ez2, self.probes[prb_n][0])/E20+\
-                    #        mode_overlap(Ez2, self.probes[prb_t][0])/E20l+\
-                    #        mode_overlap(Ez12, self.probes[prb_t][0])/E120l-\
-                    #        mode_overlap(Ez12, self.probes[prb_n][0])/E120
-                    return 3*field_mag_int(Ezc, self.probes[prb_n][3])/Ec0-\
-                            3*field_mag_int(Ezc, self.probes[prb_t][3])/Ec0l-\
-                            field_mag_int(Ez1, self.probes[prb_n][3])/E10+\
-                            field_mag_int(Ez1, self.probes[prb_t][3])/E10l-\
-                            field_mag_int(Ez2, self.probes[prb_n][3])/E20+\
-                            field_mag_int(Ez2, self.probes[prb_t][3])/E20l+\
-                            field_mag_int(Ez12, self.probes[prb_t][3])/E120l-\
-                            field_mag_int(Ez12, self.probes[prb_n][3])/E120
+                    off = 3*mode_overlap(Ezc, self.probes[prb_n][0])/Ec0n -\
+                        3*field_mag_int(Ezc, self.probes[prb_t][3])/Ec0lt
+                    one = mode_overlap(Ez1, self.probes[prb_t][0])/E10t -\
+                        field_mag_int(Ez1, self.probes[prb_n][3])/E10ln
+                    two = mode_overlap(Ez2, self.probes[prb_t][0])/E20t -\
+                        field_mag_int(Ez2, self.probes[prb_n][3])/E20ln
+                    both = mode_overlap(Ez12, self.probes[prb_t][0])/E120t -\
+                        field_mag_int(Ez12, self.probes[prb_n][3])/E120ln
+
                 else:
                     raise RuntimeError("Logic not implemented yet")
+
+                return off + one + two + both
 
             # Compute the gradient of the objective function
             objective_jac = jacobian(objective, mode='reverse')
