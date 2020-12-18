@@ -1240,15 +1240,14 @@ class PMMI:
                                        self.sources[src_2][0])
 
                 if logic == 'and':
-<<<<<<< HEAD
                     off = mode_overlap(Exc, self.probes[prb_n][0])/Ec0n -\
                         field_mag_int(Exc, self.probes[prb_t][3])/Ec0lt
                     one = mode_overlap(Ex1, self.probes[prb_n][0])/E10n -\
                         field_mag_int(Ex1, self.probes[prb_t][3])/E10lt
                     two = mode_overlap(Ex2, self.probes[prb_n][0])/E20n -\
                         field_mag_int(Ex2, self.probes[prb_t][3])/E20lt
-                    both = 3*mode_overlap(Ex12, self.probes[prb_t][0])/E120lt -\
-                        3*field_mag_int(Ex12, self.probes[prb_n][3])/E120n
+                    both = 3*mode_overlap(Ex12, self.probes[prb_t][0])/E120t -\
+                        3*field_mag_int(Ex12, self.probes[prb_n][3])/E120ln
                             
                 elif logic == 'or':
                     off = 3*mode_overlap(Exc, self.probes[prb_n][0])/Ec0n -\
@@ -1337,8 +1336,8 @@ class PMMI:
                         150*field_mag_int(Ez1, self.probes[prb_t][3])/E10lt
                     two = mode_overlap(Ez2, self.probes[prb_n][0])/E20n -\
                         100*field_mag_int(Ez2, self.probes[prb_t][3])/E20lt
-                    both = 7*mode_overlap(Ez12, self.probes[prb_t][0])/E120lt -\
-                        100*field_mag_int(Ez12, self.probes[prb_n][3])/E120n
+                    both = 7*mode_overlap(Ez12, self.probes[prb_t][0])/E120t -\
+                        100*field_mag_int(Ez12, self.probes[prb_n][3])/E120ln
                             
                 elif logic == 'or':
                     off = 3*mode_overlap(Ezc, self.probes[prb_n][0])/Ec0n -\
