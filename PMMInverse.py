@@ -348,7 +348,7 @@ class PMMI:
 
 
     def Viz_Sim_abs_opt(self, rho, src_names, savepath, bounds = [], plasma = False,\
-                        show = True, mult = False):
+                        show = True, mult = False, wp_max = 0):
         """
         Solve and visualize an optimized simulation with certain sources active
         
@@ -377,7 +377,7 @@ class PMMI:
                 w = self.sources[src_names[i]][1]
                 src = self.sources[src_names[i]][0]
             if plasma:
-                epsr_opt = self.Rho_Parameterization_wp(rho, w_src)
+                epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max)
             else:
                 epsr_opt = self.Rho_Parameterization(rho, bounds)
             if pol == 'hz':
@@ -411,7 +411,7 @@ class PMMI:
 
 
     def Viz_Sim_fields_opt(self, rho, src_names, savepath, bounds = [], plasma = False,\
-                           show = True, mult = False):
+                           show = True, mult = False, wp_max = 0):
         """
         Solve and visualize an optimized simulation with certain sources active
         
@@ -440,7 +440,7 @@ class PMMI:
                 w = self.sources[src_names[i]][1]
                 src = self.sources[src_names[i]][0]
             if plasma:
-                epsr_opt = self.Rho_Parameterization_wp(rho, w_src)
+                epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max)
             else:
                 epsr_opt = self.Rho_Parameterization(rho, bounds)
             if pol == 'hz':
