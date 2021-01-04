@@ -348,7 +348,7 @@ class PMMI:
 
 
     def Viz_Sim_abs_opt(self, rho, src_names, savepath, bounds = [], plasma = False,\
-                        show = True, mult = False):
+                        show = True, mult = False, wp_max = 0):
         """
         Solve and visualize an optimized simulation with certain sources active
         
@@ -377,7 +377,7 @@ class PMMI:
                 w = self.sources[src_names[i]][1]
                 src = self.sources[src_names[i]][0]
             if plasma:
-                epsr_opt = self.Rho_Parameterization_wp(rho, w_src)
+                epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max)
             else:
                 epsr_opt = self.Rho_Parameterization(rho, bounds)
             if pol == 'hz':
@@ -400,7 +400,10 @@ class PMMI:
         #for sl in slices:
         #    ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
         cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy',\
-                            vmin = np.min(self.Rho_to_Eps(rho, bounds = bounds, plasma = plasma, w_src = w_src)),\
+                            vmin = np.min(self.Rho_to_Eps(rho, bounds = bounds,\
+                                                          plasma = plasma,\
+                                                          w_src = w_src, \
+                                                          wp_max = wp_max)),\
                             vmax = np.max(epsr_opt)), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.savefig(savepath)
@@ -411,7 +414,7 @@ class PMMI:
 
 
     def Viz_Sim_fields_opt(self, rho, src_names, savepath, bounds = [], plasma = False,\
-                           show = True, mult = False):
+                           show = True, mult = False, wp_max = 0):
         """
         Solve and visualize an optimized simulation with certain sources active
         
@@ -440,7 +443,7 @@ class PMMI:
                 w = self.sources[src_names[i]][1]
                 src = self.sources[src_names[i]][0]
             if plasma:
-                epsr_opt = self.Rho_Parameterization_wp(rho, w_src)
+                epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max)
             else:
                 epsr_opt = self.Rho_Parameterization(rho, bounds)
             if pol == 'hz':
@@ -463,7 +466,10 @@ class PMMI:
         #for sl in slices:
         #    ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
         cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy',\
-                            vmin = np.min(self.Rho_to_Eps(rho, bounds = bounds, plasma = plasma, w_src = w_src)),\
+                            vmin = np.min(self.Rho_to_Eps(rho, bounds = bounds,\
+                                                          plasma = plasma,\
+                                                          w_src = w_src,\
+                                                          wp_max = wp_max)),\
                             vmax = np.max(epsr_opt)), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.savefig(savepath)
@@ -575,7 +581,7 @@ class PMMI:
         return train_epsr, elem_locations
 
 
-    def Eps_to_Rho(self, epsr, bounds=[], plasma = False, w_src = 1):
+    def Eps_to_Rho(self, epsr, bounds=[], plasma = False, w_src = 1, wp_max = 0):
         """
         Returns parameters associated with array of values of epsr
 
@@ -587,12 +593,12 @@ class PMMI:
             w_src: source frequency
         """
         if plasma:
-            return self.Eps_to_Rho_wp(epsr, w_src)
+            return self.Eps_to_Rho_wp(epsr, w_src, wp_max)
         else:
             return npa.tan(((epsr-bounds[0])/(bounds[1]-bounds[0])-0.5)*np.pi)
 
     
-    def Rho_to_Eps(self, rho, bounds=[], plasma = False, w_src = 1):
+    def Rho_to_Eps(self, rho, bounds=[], plasma = False, w_src = 1, wp_max = 0):
         """
         Returns permittivity values associated with a parameter matrix
 
@@ -604,12 +610,12 @@ class PMMI:
             w_src: source frequency
         """
         if plasma:
-            return self.Rho_to_Eps_wp(rho, w_src)
+            return self.Rho_to_Eps_wp(rho, w_src, wp_max)
         else:
             return (bounds[1]-bounds[0])*(npa.arctan(rho)/np.pi+0.5)+bounds[0]
 
 
-    def Eps_to_Rho_wp(self, epsr, w_src):
+    def Eps_to_Rho_wp(self, epsr, w_src, wp_max = 0):
         """
         Returns parameters associated with array of values of epsr
 
@@ -619,11 +625,15 @@ class PMMI:
         """
         if np.max(epsr) >= 1:
             raise RuntimeError("One or more of the permittivity values is invalid.\
-                    Choose relative permittivity values less than 1.")
-        return (w_src**2*(1-epsr))**0.5
+                    Choose relative permittivity values less than 1.")  
+        if wp_max > 0:
+            return npa.tan((w_src**2*(1-epsr))**0.5*(1.5/wp_max))*(wp_max/7.5)
+        else:
+            return (w_src**2*(1-epsr))**0.5
+
 
     
-    def Rho_to_Eps_wp(self, rho, w_src):
+    def Rho_to_Eps_wp(self, rho, w_src, wp_max = 0):
         """
         Returns permittivity values associated with a parameter matrix
 
@@ -631,8 +641,11 @@ class PMMI:
             rho: array of optimization parameters
             w_src: source frequency
         """
-        return 1-(npa.abs(rho))**2/w_src**2
-
+        if wp_max > 0:
+            return 1-((wp_max/1.5)*npa.arctan(rho/(wp_max/7.5)))**2/w_src**2
+        else:
+            return 1-(rho)**2/w_src**2
+  
 
     def Rho_Parameterization(self, rho, bounds, eps_bg_des = 1):
         """
@@ -1240,15 +1253,14 @@ class PMMI:
                                        self.sources[src_2][0])
 
                 if logic == 'and':
-<<<<<<< HEAD
                     off = mode_overlap(Exc, self.probes[prb_n][0])/Ec0n -\
                         field_mag_int(Exc, self.probes[prb_t][3])/Ec0lt
                     one = mode_overlap(Ex1, self.probes[prb_n][0])/E10n -\
                         field_mag_int(Ex1, self.probes[prb_t][3])/E10lt
                     two = mode_overlap(Ex2, self.probes[prb_n][0])/E20n -\
                         field_mag_int(Ex2, self.probes[prb_t][3])/E20lt
-                    both = 3*mode_overlap(Ex12, self.probes[prb_t][0])/E120lt -\
-                        3*field_mag_int(Ex12, self.probes[prb_n][3])/E120n
+                    both = 3*mode_overlap(Ex12, self.probes[prb_t][0])/E120t -\
+                        3*field_mag_int(Ex12, self.probes[prb_n][3])/E120ln
                             
                 elif logic == 'or':
                     off = 3*mode_overlap(Exc, self.probes[prb_n][0])/Ec0n -\
@@ -1337,8 +1349,8 @@ class PMMI:
                         150*field_mag_int(Ez1, self.probes[prb_t][3])/E10lt
                     two = mode_overlap(Ez2, self.probes[prb_n][0])/E20n -\
                         100*field_mag_int(Ez2, self.probes[prb_t][3])/E20lt
-                    both = 7*mode_overlap(Ez12, self.probes[prb_t][0])/E120lt -\
-                        100*field_mag_int(Ez12, self.probes[prb_n][3])/E120n
+                    both = 7*mode_overlap(Ez12, self.probes[prb_t][0])/E120t -\
+                        100*field_mag_int(Ez12, self.probes[prb_n][3])/E120ln
                             
                 elif logic == 'or':
                     off = 3*mode_overlap(Ezc, self.probes[prb_n][0])/Ec0n -\
