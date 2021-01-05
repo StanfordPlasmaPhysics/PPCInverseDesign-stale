@@ -24,7 +24,9 @@ from ceviche.optimizers import adam_optimize
 from ceviche.modes import insert_mode
 import collections
 
-## Utility Functions ##########################################################
+###############################################################################
+## Utility Functions 
+###############################################################################
 c = 299792458
 
 def mode_overlap(E1, E2):
@@ -46,8 +48,11 @@ def field_mag_int(E, mask):
         you would like to integrate
     """
     return npa.abs(npa.sum(npa.multiply(npa.multiply(npa.conj(E), E), mask)))*1e6
-###############################################################################
 
+
+###############################################################################
+## Inverse design of plasma metamaterials class 
+###############################################################################
 class PMMI:
     def __init__(self, a, res, nx, ny, dpml):
         """
@@ -77,6 +82,9 @@ class PMMI:
         self.sources = {} #Empty dict to hold source arrays
         self.probes = {} #Empty dict to hold probe arrays
 
+    ###########################################################################
+    ## Design Region Stuff
+    ###########################################################################
     def Design_Region(self, bot_left, extent):
         """
         Specify design region selector
@@ -268,7 +276,9 @@ class PMMI:
                 y = xy_start[1] + j*d_y
                 self.Add_Rod_train(r, (x, y))
 
-
+    ###########################################################################
+    ## Plotting Functions
+    ###########################################################################
     def Viz_Sim_abs(self, src_names, savepath):
         """
         Solve and visualize an static simulation with certain sources active
@@ -300,7 +310,8 @@ class PMMI:
                                     not valid.')
                 
         cbar = plt.colorbar(ax[len(src_names)].imshow(self.epsr.T, cmap='RdGy',\
-                            vmin = bounds[0], vmax = bounds[1]), ax=ax[len(src_names)])
+                            vmin = np.min(self.epsr), vmax = np.max(self.epsr)),\
+                            ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.savefig(savepath)
         plt.show()
@@ -339,7 +350,8 @@ class PMMI:
                                     not valid.')
                 
         cbar = plt.colorbar(ax[len(src_names)].imshow(self.epsr.T, cmap='RdGy',\
-                            vmin = bounds[0], vmax = bounds[1]), ax=ax[len(src_names)])
+                            vmin = np.min(self.epsr), vmax = np.max(self.epsr)),\
+                            ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.savefig(savepath)
         plt.show()
@@ -376,29 +388,28 @@ class PMMI:
                 pol = self.sources[src_names[i]][2]
                 w = self.sources[src_names[i]][1]
                 src = self.sources[src_names[i]][0]
+
             if plasma:
                 epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max)
             else:
                 epsr_opt = self.Rho_Parameterization(rho, bounds)
+
             if pol == 'hz':
                 simulation = fdfd_hz(w, self.dl, epsr_opt, [self.Npml, self.Npml])
                 Ex, Ey, Hz = simulation.solve(src)
                 cbar = plt.colorbar(ax[i].imshow(np.abs(Hz.T), cmap='magma'), ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('H-Field Magnitude', fontsize=font)
-                #ax[i].contour(epsr_opt.T, 1, colors='w', alpha=0.5)
             elif pol == 'ez':
                 simulation = fdfd_ez(w, self.dl, epsr_opt, [self.Npml, self.Npml])
                 Hx, Hy, Ez = simulation.solve(src)
                 cbar = plt.colorbar(ax[i].imshow(np.abs(Ez.T), cmap='magma'), ax=ax[i])
                 cbar.set_ticks([])
                 cbar.ax.set_ylabel('E-Field Magnitude', fontsize=font)
-                #ax[i].contour(epsr_opt.T, 1, colors='w', alpha=0.5)
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
-        #for sl in slices:
-        #    ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+
         cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy',\
                             vmin = np.min(self.Rho_to_Eps(rho, bounds = bounds,\
                                                           plasma = plasma,\
@@ -407,6 +418,7 @@ class PMMI:
                             vmax = np.max(epsr_opt)), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.savefig(savepath)
+
         if show:
             plt.show()
 
@@ -442,10 +454,12 @@ class PMMI:
                 pol = self.sources[src_names[i]][2]
                 w = self.sources[src_names[i]][1]
                 src = self.sources[src_names[i]][0]
+
             if plasma:
                 epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max)
             else:
                 epsr_opt = self.Rho_Parameterization(rho, bounds)
+
             if pol == 'hz':
                 simulation = fdfd_hz(w, self.dl, epsr_opt, [self.Npml, self.Npml])
                 Ex, Ey, Hz = simulation.solve(src)
@@ -463,8 +477,7 @@ class PMMI:
             else:
                 raise RuntimeError('The polarization associated with this source is\
                                     not valid.')
-        #for sl in slices:
-        #    ax[0].plot(sl.x*np.ones(len(sl.y)), sl.y, 'b-')
+
         cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy',\
                             vmin = np.min(self.Rho_to_Eps(rho, bounds = bounds,\
                                                           plasma = plasma,\
@@ -473,6 +486,7 @@ class PMMI:
                             vmax = np.max(epsr_opt)), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.savefig(savepath)
+
         if show:
             plt.show()
 
@@ -499,6 +513,9 @@ class PMMI:
         return ax
 
 
+    ###########################################################################
+    ## Parameterization Functions
+    ###########################################################################
     def Mask_Combine_Rho(self, train_epsr, elem_locs, bounds, eps_bg_des):
         """
         Utility function for combining the design region with its trainable 
@@ -676,6 +693,9 @@ class PMMI:
         return self.Mask_Combine_Rho_wp(train_epsr, elem_locs, eps_bg_des)
 
 
+    ###########################################################################
+    ## Optimizers
+    ###########################################################################
     def Optimize_Waveguide(self, Rho, src, prb, alpha, nepochs, bounds = [],\
             plasma = False, wp_max = 0):
         """
@@ -1378,6 +1398,9 @@ class PMMI:
             return rho_optimum.reshape(Rho.shape), obj
 
 
+    ###########################################################################
+    ## Params i/o
+    ###########################################################################
     def Params_to_Exp(self, rho, src, bounds = [], plasma = False, nu_col=0):
         """
         Output experimental data needed to rebuild a certain design
@@ -1399,7 +1422,7 @@ class PMMI:
                 (self.sources[src][1]**2+(nu_col*2*np.pi*c/self.a)**2))/(10**9))
 
 
-    def Params_to_Exp_wp(self, rho, src, nu_col=0):
+    def Params_to_Exp_wp(self, rho, src, nu_col=0, wp_max = 0):
         """
         Output experimental data needed to rebuild a certain design
 
@@ -1412,7 +1435,10 @@ class PMMI:
         print("The lattice frequency is: ", c/self.a/(10**9)," GHz")
         print("The source frequency is: ", self.sources[src][1]/2/np.pi/(10**9), " GHz")
         print("The plasma frequencies (GHz) necessary to achieve this design are:")
-        print(rho*c/self.a/(10**9))
+        if wp_max > 0:
+            print((wp_max/1.5)*npa.arctan(npa.abs(rho)/(wp_max/7.5))*c/self.a/(10**9))
+        else:
+            print(npa.abs(rho)*c/self.a/(10**9))
 
 
     def Save_Params(self, rho, savepath):
