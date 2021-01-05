@@ -1363,14 +1363,14 @@ class PMMI:
                                        self.sources[src_2][0])
 
                 if logic == 'and':
-                    off = 6*mode_overlap(Ezc, self.probes[prb_n][0])/Ec0n -\
+                    off = mode_overlap(Ezc, self.probes[prb_n][0])/Ec0n -\
                         field_mag_int(Ezc, self.probes[prb_t][3])/Ec0lt
                     one = mode_overlap(Ez1, self.probes[prb_n][0])/E10n -\
-                        150*field_mag_int(Ez1, self.probes[prb_t][3])/E10lt
+                        field_mag_int(Ez1, self.probes[prb_t][3])/E10lt
                     two = mode_overlap(Ez2, self.probes[prb_n][0])/E20n -\
-                        100*field_mag_int(Ez2, self.probes[prb_t][3])/E20lt
-                    both = 7*mode_overlap(Ez12, self.probes[prb_t][0])/E120t -\
-                        100*field_mag_int(Ez12, self.probes[prb_n][3])/E120ln
+                        field_mag_int(Ez2, self.probes[prb_t][3])/E20lt
+                    both = 3*mode_overlap(Ez12, self.probes[prb_t][0])/E120t -\
+                        3*field_mag_int(Ez12, self.probes[prb_n][3])/E120ln
                             
                 elif logic == 'or':
                     off = 3*mode_overlap(Ezc, self.probes[prb_n][0])/Ec0n -\
@@ -1401,7 +1401,7 @@ class PMMI:
     ###########################################################################
     ## Params i/o
     ###########################################################################
-    def Params_to_Exp(self, rho, src, bounds = [], plasma = False, nu_col=0):
+    def Params_to_Exp(self, rho, src, bounds = [], plasma = False, nu_col = 0, wp_max = 0):
         """
         Output experimental data needed to rebuild a certain design
 
@@ -1413,7 +1413,7 @@ class PMMI:
             nu_col: supposed collision frequency in c/a units
         """
         if plasma:
-            self.Params_to_Exp_wp(rho, src)
+            self.Params_to_Exp_wp(rho, src, nu_col, wp_max)
         else:
             print("The lattice frequency is: ", c/self.a/(10**9)," GHz")
             print("The source frequency is: ", self.sources[src][1]/2/np.pi/(10**9), " GHz")
@@ -1422,7 +1422,7 @@ class PMMI:
                 (self.sources[src][1]**2+(nu_col*2*np.pi*c/self.a)**2))/(10**9))
 
 
-    def Params_to_Exp_wp(self, rho, src, nu_col=0, wp_max = 0):
+    def Params_to_Exp_wp(self, rho, src, nu_col = 0, wp_max = 0):
         """
         Output experimental data needed to rebuild a certain design
 
