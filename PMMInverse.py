@@ -49,6 +49,13 @@ def field_mag_int(E, mask):
     """
     return npa.abs(npa.sum(npa.multiply(npa.multiply(npa.conj(E), E), mask)))*1e6
 
+def callback_params(iteration, of_list, rho):
+    """
+    Callback function to save params at each iteration for a given run. This 
+    function will overwrite data from a previous run, and will not overwrite
+    all the files from a run which had more iterations.
+    """
+    np.savetxt('run_params/iter_%d.csv' % iteration, rho, delimiter=',')
 
 ###############################################################################
 ## Inverse design of plasma metamaterials class 
@@ -697,7 +704,7 @@ class PMMI:
     ## Optimizers
     ###########################################################################
     def Optimize_Waveguide(self, Rho, src, prb, alpha, nepochs, bounds = [],\
-            plasma = False, wp_max = 0):
+            plasma = False, wp_max = 0, param_evolution = False):
         """
         Optimize a waveguide PMM
 
@@ -749,9 +756,15 @@ class PMMI:
             objective_jac = jacobian(objective, mode='reverse')
 
             # Maximize the objective function using an ADAM optimizer
-            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                objective_jac, Nsteps = nepochs,\
-                                direction = 'max', step_size = alpha)
+            if param_evolution:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha,\
+                                    callback = callback_params)
+            else:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha)
 
             return rho_optimum.reshape(Rho.shape), obj
 
@@ -794,9 +807,15 @@ class PMMI:
             objective_jac = jacobian(objective, mode='reverse')
 
             # Maximize the objective function using an ADAM optimizer
-            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                objective_jac, Nsteps = nepochs,\
-                                direction = 'max', step_size = alpha)
+            if param_evolution:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha,\
+                                    callback = callback_params)
+            else:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha)
 
             return rho_optimum.reshape(Rho.shape), obj
 
@@ -805,7 +824,7 @@ class PMMI:
 
 
     def Optimize_Waveguide_Penalize(self, Rho, src, prb, prbl, alpha, nepochs,\
-            bounds = [], plasma = False, wp_max = 0):
+            bounds = [], plasma = False, wp_max = 0, param_evolution = False):
         """
         Optimize a waveguide PMM
 
@@ -860,9 +879,15 @@ class PMMI:
             objective_jac = jacobian(objective, mode='reverse')
 
             # Maximize the objective function using an ADAM optimizer
-            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                objective_jac, Nsteps = nepochs,\
-                                direction = 'max', step_size = alpha)
+            if param_evolution:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha,\
+                                    callback = callback_params)
+            else:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha)
 
             return rho_optimum.reshape(Rho.shape), obj
 
@@ -907,9 +932,15 @@ class PMMI:
             objective_jac = jacobian(objective, mode='reverse')
 
             # Maximize the objective function using an ADAM optimizer
-            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                objective_jac, Nsteps = nepochs,\
-                                direction = 'max', step_size = alpha)
+            if param_evolution:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha,\
+                                    callback = callback_params)
+            else:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha)
 
             return rho_optimum.reshape(Rho.shape), obj
 
@@ -919,7 +950,7 @@ class PMMI:
 
     def Optimize_Multiplexer(self, Rho, src_1, src_2, prb_1, prb_2,\
                              alpha, nepochs, bounds = [], plasma = False,\
-                             wp_max = 0):
+                             wp_max = 0, param_evolution = False):
         """
         Optimize a multiplexer PMM
 
@@ -986,9 +1017,15 @@ class PMMI:
             objective_jac = jacobian(objective, mode='reverse')
 
             # Maximize the objective function using an ADAM optimizer
-            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                objective_jac, Nsteps = nepochs, bounds=bounds,\
-                                direction = 'max', step_size = alpha)
+            if param_evolution:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha,\
+                                    callback = callback_params)
+            else:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha)
 
             return rho_optimum.reshape(Rho.shape), obj
 
@@ -1044,9 +1081,15 @@ class PMMI:
             objective_jac = jacobian(objective, mode='reverse')
 
             # Maximize the objective function using an ADAM optimizer
-            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                objective_jac, Nsteps = nepochs, bounds=bounds,\
-                                direction = 'max', step_size = alpha)
+            if param_evolution:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha,\
+                                    callback = callback_params)
+            else:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha)
 
             return rho_optimum.reshape(Rho.shape), obj
 
@@ -1056,7 +1099,7 @@ class PMMI:
 
     def Optimize_Multiplexer_Penalize(self, Rho, src_1, src_2, prb_1, prb_2,\
                              alpha, nepochs, bounds = [], plasma = False,\
-                             wp_max = 0):
+                             wp_max = 0, param_evolution = False):
         """
         Optimize a multiplexer PMM with leak into opposite gate penalized.
 
@@ -1127,9 +1170,15 @@ class PMMI:
             objective_jac = jacobian(objective, mode='reverse')
 
             # Maximize the objective function using an ADAM optimizer
-            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                objective_jac, Nsteps = nepochs, bounds=bounds,\
-                                direction = 'max', step_size = alpha)
+            if param_evolution:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha,\
+                                    callback = callback_params)
+            else:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha)
 
             return rho_optimum.reshape(Rho.shape), obj
 
@@ -1189,9 +1238,15 @@ class PMMI:
             objective_jac = jacobian(objective, mode='reverse')
 
             # Maximize the objective function using an ADAM optimizer
-            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                objective_jac, Nsteps = nepochs, bounds=bounds,\
-                                direction = 'max', step_size = alpha)
+            if param_evolution:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha,\
+                                    callback = callback_params)
+            else:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha)
 
             return rho_optimum.reshape(Rho.shape), obj
 
@@ -1200,7 +1255,8 @@ class PMMI:
 
 
     def Optimize_Logic_Gate(self, Rho, src_1, src_2, src_c, prb_n, prb_t, alpha,\
-            nepochs, logic, bounds = [], plasma = False, wp_max = 0):
+            nepochs, logic, bounds = [], plasma = False, wp_max = 0,\
+            param_evolution = False):
         """
         Optimize a logic gate PMM
 
@@ -1301,9 +1357,15 @@ class PMMI:
             objective_jac = jacobian(objective, mode='reverse')
 
             # Maximize the objective function using an ADAM optimizer
-            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                objective_jac, Nsteps = nepochs, bounds=bounds,\
-                                direction = 'max', step_size = alpha)
+            if param_evolution:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha,\
+                                    callback = callback_params)
+            else:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha)
 
             return rho_optimum.reshape(Rho.shape), obj
 
@@ -1391,9 +1453,15 @@ class PMMI:
             objective_jac = jacobian(objective, mode='reverse')
 
             # Maximize the objective function using an ADAM optimizer
-            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                objective_jac, Nsteps = nepochs, bounds=bounds,\
-                                direction = 'max', step_size = alpha)
+            if param_evolution:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha,\
+                                    callback = callback_params)
+            else:
+                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    objective_jac, Nsteps = nepochs,\
+                                    direction = 'max', step_size = alpha)
 
             return rho_optimum.reshape(Rho.shape), obj
 
