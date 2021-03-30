@@ -126,6 +126,26 @@ class PMMI:
         self.epsr[rr, cc] = eps
 
 
+    def Add_Bulb(self, d_bulb, center, eps):
+        """
+        Add a single rod with radius r and rel. permittivity eps to epsr.
+
+        Args:
+            r: tuple in a units (inner bulb radius, outer bulb radius)
+            center: x,y coords of the rod center in a units
+            eps: relative permittivity of bulb
+        """
+        Ri = int(round(d_bulb[0]*self.res))
+        Ro = int(round(d_bulb[1]*self.res))
+        X = int(round(center[0]*self.res))
+        Y = int(round(center[1]*self.res))
+        rri, cci = disk((X, Y), Ri, shape = self.epsr.shape)
+        rro, cco = disk((X, Y), Ro, shape = self.epsr.shape)
+        
+        self.design_region[rro, cco] += eps - 1
+        self.design_region[rri, cci] += 1 - eps
+
+
     def Add_Rod_train(self, r, center):
         """
         Add a single rod with radius r and rel. permittivity eps to the trainable
@@ -265,7 +285,8 @@ class PMMI:
                 self.Add_Rod(r, (x, y), rod_e)
 
 
-    def Rod_Array_train(self, r, xy_start, array_dims, d_x = 1, d_y = 1):
+    def Rod_Array_train(self, r, xy_start, array_dims, d_x = 1, d_y = 1,\
+                        bulbs = False, d_bulb = (0, 0), eps_bulb = 1):
         """
         Add a 2D rectangular rod array to the train elems. All rods are spaced 1 a
         in the x and y direction by default.
@@ -276,13 +297,48 @@ class PMMI:
             y_start: y-coord of the bottom right of the array in a units
             d_x: lattice spacing in x-direction in a units
             d_y: lattice spacing in y-direction in a units
+            bulbs: bool specifying if dicharge glass is included
+            d_bulb: tuple in a units (inner radius of glass, outer radius of glass)
+            eps_bulb: rel. perm. of bulb glass
         """
         for i in range(array_dims[0]):
             for j in range(array_dims[1]):
                 x = xy_start[0] + i*d_x
                 y = xy_start[1] + j*d_y
                 self.Add_Rod_train(r, (x, y))
+                if bulbs:
+                    self.Add_Bulb(d_bulb, (x, y), eps_bulb)
 
+
+    def Rod_Array_Hex_train(self, r, xy_start, array_dims, bulbs = False,\
+                            d_bulb = (0, 0), eps_bulb = 1):
+        """
+        Add a 2D hexagonal rod array to the train elems. All rods are spaced 1 a
+        in the x and y direction by default.
+
+        Args:
+            r: radius of rods in a units
+            x_start: x-coord of the bottom left of the array in a units
+            y_start: y-coord of the bottom right of the array in a units
+            d_x: lattice spacing in x-direction in a units
+            d_y: lattice spacing in y-direction in a units
+            bulbs: bool specifying if dicharge glass is included
+            d_bulb: tuple in a units (inner radius of glass, outer radius of glass)
+            eps_bulb: rel. perm. of bulb glass
+        """
+        for i in range(array_dims[0]):
+            if i%2 == 0:
+                y_offset = 0
+                num_rods = array_dims[1]
+            if i%2 == 1:
+                y_offset = 0.5
+                num_rods = array_dims[1]
+            for j in range(num_rods):
+                x = xy_start[0] + i*np.sqrt(3)/2
+                y = y_offset + xy_start[1] + j
+                self.Add_Rod_train(r, (x, y))
+                if bulbs:
+                    self.Add_Bulb(d_bulb, (x, y), eps_bulb)
     ###########################################################################
     ## Plotting Functions
     ###########################################################################
