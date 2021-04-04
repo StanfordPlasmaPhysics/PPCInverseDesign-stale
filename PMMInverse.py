@@ -25,9 +25,12 @@ from ceviche.modes import insert_mode
 import collections
 
 ###############################################################################
-## Utility Functions 
+## Utility Functions and Globals
 ###############################################################################
 c = 299792458
+e = 1.60217662*10**(-19)
+epso = 8.8541878128*10**(-12)
+me = 9.1093837015*10**(-31)
 
 def mode_overlap(E1, E2):
     """
@@ -56,6 +59,22 @@ def callback_params(iteration, of_list, rho):
     all the files from a run which had more iterations.
     """
     np.savetxt('run_params/iter_%d.csv' % iteration, rho, delimiter=',')
+
+def WP(n):
+    """
+    Function for calculating plasma frequency given density
+
+    n: electron density in m^(-3)
+    """
+    return (n*e**2/me/epso)**(1/2)
+
+def n_e(wp):
+    """
+    Function for calculating electron density given plasma frequency
+
+    wp: plasma frequency in rad/s
+    """
+    return wp**2*me*epso/e**2
 
 ###############################################################################
 ## Inverse design of plasma metamaterials class 
@@ -88,6 +107,8 @@ class PMMI:
                                                          #outside the training region.
         self.sources = {} #Empty dict to hold source arrays
         self.probes = {} #Empty dict to hold probe arrays
+        self.rod_shells = 0 #Integer that tells you how many shells exist in a
+                            #single trainable rod.
 
     ###########################################################################
     ## Design Region Stuff
@@ -148,8 +169,7 @@ class PMMI:
 
     def Add_Rod_train(self, r, center):
         """
-        Add a single rod with radius r and rel. permittivity eps to the trainable
-        element array.
+        Add a single rod with radius r to the trainable element array.
 
         Args:
             r: radius of the rod in a units
@@ -163,6 +183,34 @@ class PMMI:
         train_elem = np.zeros((self.epsr.shape))
         train_elem[rr, cc] = 1
         self.train_elems.append(train_elem)
+
+
+    def Add_Rod_train_radial_shells(self, r, center):
+        """
+        Add a single rod with radius r to the trainable element array with 
+        radius-dependent permittivity (i.e. shells)
+
+        Args:
+            r: radius of the rod in a units
+            center: x,y coords of the rod center in a units
+        """
+        R = int(round(r*self.res))
+        X = int(round(center[0]*self.res))
+        Y = int(round(center[1]*self.res))
+        self.rod_shells = R
+
+        for i in range(R):
+            if i > 0:
+                rri, cci = disk((X, Y), i, shape = self.epsr.shape)
+            rro, cco = disk((X, Y), i+1, shape = self.epsr.shape)
+        
+            train_elem = np.zeros((self.epsr.shape))
+            train_elem[rro, cco] = 1
+            if i > 0:
+                train_elem[rri, cci] = 0
+                #train_elem = train_elem - np.multiply(train_elem,\
+                #             self.train_elems[len(self.train_elems)-1])
+            self.train_elems.append(train_elem)
 
 
     def Add_Block(self, bot_left, extent, eps):
@@ -286,7 +334,8 @@ class PMMI:
 
 
     def Rod_Array_train(self, r, xy_start, array_dims, d_x = 1, d_y = 1,\
-                        bulbs = False, d_bulb = (0, 0), eps_bulb = 1):
+                        bulbs = False, d_bulb = (0, 0), eps_bulb = 1,\
+                        uniform = True):
         """
         Add a 2D rectangular rod array to the train elems. All rods are spaced 1 a
         in the x and y direction by default.
@@ -305,7 +354,10 @@ class PMMI:
             for j in range(array_dims[1]):
                 x = xy_start[0] + i*d_x
                 y = xy_start[1] + j*d_y
-                self.Add_Rod_train(r, (x, y))
+                if uniform:
+                    self.Add_Rod_train(r, (x, y))
+                else:
+                    self.Add_Rod_train_radial_shells(r, (x, y))
                 if bulbs:
                     self.Add_Bulb(d_bulb, (x, y), eps_bulb)
 
@@ -423,7 +475,7 @@ class PMMI:
 
 
     def Viz_Sim_abs_opt(self, rho, src_names, savepath, bounds = [], plasma = False,\
-                        show = True, mult = False, wp_max = 0):
+                        show = True, mult = False, wp_max = 0, uniform = True):
         """
         Solve and visualize an optimized simulation with certain sources active
         
@@ -453,7 +505,7 @@ class PMMI:
                 src = self.sources[src_names[i]][0]
 
             if plasma:
-                epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max)
+                epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max, uniform)
             else:
                 epsr_opt = self.Rho_Parameterization(rho, bounds)
 
@@ -474,10 +526,7 @@ class PMMI:
                                     not valid.')
 
         cbar = plt.colorbar(ax[len(src_names)].imshow(epsr_opt.T, cmap='RdGy',\
-                            vmin = np.min(self.Rho_to_Eps(rho, bounds = bounds,\
-                                                          plasma = plasma,\
-                                                          w_src = w_src, \
-                                                          wp_max = wp_max)),\
+                            vmin = np.min(self.design_region*epsr_opt),\
                             vmax = np.max(epsr_opt)), ax=ax[len(src_names)])
         cbar.ax.set_ylabel('Relative Permittivity', fontsize=font)
         plt.savefig(savepath)
@@ -489,7 +538,7 @@ class PMMI:
 
 
     def Viz_Sim_fields_opt(self, rho, src_names, savepath, bounds = [], plasma = False,\
-                           show = True, mult = False, wp_max = 0):
+                           show = True, mult = False, wp_max = 0, uniform = True):
         """
         Solve and visualize an optimized simulation with certain sources active
         
@@ -519,7 +568,7 @@ class PMMI:
                 src = self.sources[src_names[i]][0]
 
             if plasma:
-                epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max)
+                epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max, uniform)
             else:
                 epsr_opt = self.Rho_Parameterization(rho, bounds)
 
@@ -642,11 +691,13 @@ class PMMI:
 
     def Scale_Rho_wp(self, rho, w_src, wp_max = 0):
         """
-        Basically applies an absolute value to the parameters so negative plasma
-        frequencies aren't fed to the mask combine rho function
+        Uses the Drude dispersion along with an arctan barrier to map the
+        parameters to relative permittivity
 
         Args:
             rho: Parameters being optimized
+            w_src: Non-dimensionalized operating frequency
+            wp_max: Approximate maximum non-dimensionalized plasma frequency
         """
         rho = rho.flatten()
         if wp_max > 0:
@@ -657,6 +708,34 @@ class PMMI:
         for i in range(len(rho)):
             train_epsr += rho[i]*self.train_elems[i]
             elem_locations += self.train_elems[i]
+        
+        return train_epsr, elem_locations
+
+
+    def Scale_Rho_wp_parabolic(self, rho, w_src, wp_max = 0):
+        """
+        Uses the Drude dispersion along with an arctan barrier to map the
+        parameters to relative permittivity according to a parabolic density
+        profile
+
+        Args:
+            rho: Parameters being optimized. In this case, these parameters are
+                 the non-dimensionalizxed average plasma frequencies of the
+                 columns.
+            w_src: Non-dimensionalized operating frequency
+            wp_max: Approximate maximum non-dimensionalized plasma frequency
+        """
+        rho = rho.flatten()
+        train_epsr = np.zeros(self.train_elems[0].shape)
+        elem_locations = np.zeros(self.train_elems[0].shape)
+        if wp_max > 0:
+            rho = (wp_max/1.5)*npa.arctan(rho/(wp_max/7.5))
+        for r in range(self.rod_shells):
+            rho_shell = npa.subtract(1, npa.divide(npa.multiply(npa.power(npa.abs(rho), 2),\
+                        4*(1-r**2/(self.rod_shells-1)**2)), w_src**2))
+            for i in range(len(rho_shell)):
+                train_epsr += rho_shell[i]*self.train_elems[i*self.rod_shells + r]
+                elem_locations += self.train_elems[i*self.rod_shells + r]
         
         return train_epsr, elem_locations
 
@@ -741,7 +820,8 @@ class PMMI:
         return self.Mask_Combine_Rho(train_epsr, elem_locs, bounds, eps_bg_des)
 
 
-    def Rho_Parameterization_wp(self, rho, w_src, wp_max = 0, eps_bg_des = 1):
+    def Rho_Parameterization_wp(self, rho, w_src, wp_max = 0, uniform = True,\
+                                eps_bg_des = 1):
         """
         Apply scaling/parameterization and create a permittivity matrix when
         mapping plasma frequency to permittivity
@@ -751,16 +831,26 @@ class PMMI:
             w_src: Source frequency, non-dimensionalized
             eps_bg_des: background epsilon for the design/optimization region
         """
-        train_epsr, elem_locs = self.Scale_Rho_wp(rho, w_src, wp_max)
+        if uniform:
+            train_epsr, elem_locs = self.Scale_Rho_wp(rho, w_src, wp_max)
+        else:
+            train_epsr, elem_locs = self.Scale_Rho_wp_parabolic(rho, w_src, wp_max)
 
         return self.Mask_Combine_Rho_wp(train_epsr, elem_locs, eps_bg_des)
+
+
+    def gamma(self, gamma_Hz)
+        """
+        Convert dimensionalized collision frequency to non-dim freq using a
+        """
+        return gamma_Hz/(c/self.a)
 
 
     ###########################################################################
     ## Optimizers
     ###########################################################################
     def Optimize_Waveguide(self, Rho, src, prb, alpha, nepochs, bounds = [],\
-            plasma = False, wp_max = 0, param_evolution = False):
+            plasma = False, wp_max = 0, uniform = True, param_evolution = False):
         """
         Optimize a waveguide PMM
 
@@ -777,7 +867,7 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src][1]*self.a/2/np.pi/c, wp_max)
+                        self.sources[src][1]*self.a/2/np.pi/c, wp_max, uniform)
             else:
                 epsr_init = self.Rho_Parameterization(Rho, bounds)
             sim = fdfd_hz(self.sources[src][1], self.dl, epsr_init,\
@@ -799,7 +889,7 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src][1]*self.a/2/np.pi/c, wp_max)
+                            self.sources[src][1]*self.a/2/np.pi/c, wp_max, uniform)
                 else:
                     epsr = self.Rho_Parameterization(rho, bounds)
                 sim.eps_r = epsr
@@ -828,7 +918,7 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src][1]*self.a/2/np.pi/c, wp_max)
+                        self.sources[src][1]*self.a/2/np.pi/c, wp_max, uniform)
             else:
                 epsr_init = self.Rho_Parameterization(Rho, bounds)
             sim = fdfd_ez(self.sources[src][1], self.dl, epsr_init,\
@@ -850,7 +940,7 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src][1]*self.a/2/np.pi/c, wp_max)
+                            self.sources[src][1]*self.a/2/np.pi/c, wp_max, uniform)
                 else:
                     epsr = self.Rho_Parameterization(rho, bounds)
                 sim.eps_r = epsr
@@ -880,7 +970,8 @@ class PMMI:
 
 
     def Optimize_Waveguide_Penalize(self, Rho, src, prb, prbl, alpha, nepochs,\
-            bounds = [], plasma = False, wp_max = 0, param_evolution = False):
+            bounds = [], plasma = False, wp_max = 0, uniform = True,\
+            param_evolution = False):
         """
         Optimize a waveguide PMM
 
@@ -898,7 +989,7 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src][1]*self.a/2/np.pi/c, wp_max)
+                        self.sources[src][1]*self.a/2/np.pi/c, wp_max, uniform)
             else:
                 epsr_init = self.Rho_Parameterization(Rho, bounds)
             sim = fdfd_hz(self.sources[src][1], self.dl, epsr_init,\
@@ -921,7 +1012,7 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src][1]*self.a/2/np.pi/c, wp_max)
+                            self.sources[src][1]*self.a/2/np.pi/c, wp_max, uniform)
                 else:
                     epsr = self.Rho_Parameterization(rho, bounds)
                 sim.eps_r = epsr
@@ -951,7 +1042,7 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src][1]*self.a/2/np.pi/c, wp_max)
+                        self.sources[src][1]*self.a/2/np.pi/c, wp_max, uniform)
             else:
                 epsr_init = self.Rho_Parameterization(Rho, bounds)
             sim = fdfd_ez(self.sources[src][1], self.dl, epsr_init,\
@@ -974,7 +1065,7 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src][1]*self.a/2/np.pi/c, wp_max)
+                            self.sources[src][1]*self.a/2/np.pi/c, wp_max, uniform)
                 else:
                     epsr = self.Rho_Parameterization(rho, bounds)
                 sim.eps_r = epsr
@@ -1006,7 +1097,7 @@ class PMMI:
 
     def Optimize_Multiplexer(self, Rho, src_1, src_2, prb_1, prb_2,\
                              alpha, nepochs, bounds = [], plasma = False,\
-                             wp_max = 0, param_evolution = False):
+                             wp_max = 0, uniform = True, param_evolution = False):
         """
         Optimize a multiplexer PMM
 
@@ -1025,9 +1116,9 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init1 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max, uniform)
                 epsr_init2 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
+                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max, uniform)
             else:
                 epsr_init1 = self.Rho_Parameterization(Rho, bounds)
                 epsr_init2 = self.Rho_Parameterization(Rho, bounds)
@@ -1054,9 +1145,11 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr1 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
+                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
+                            uniform)
                     epsr2 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
+                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max,\
+                            uniform)
                 else:
                     epsr1 = self.Rho_Parameterization(rho, bounds)
                     epsr2 = self.Rho_Parameterization(rho, bounds)
@@ -1089,9 +1182,9 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init1 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max, uniform)
                 epsr_init2 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
+                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max, uniform)
             else:
                 epsr_init1 = self.Rho_Parameterization(Rho, bounds)
                 epsr_init2 = self.Rho_Parameterization(Rho, bounds)
@@ -1118,9 +1211,11 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr1 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
+                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
+                            uniform)
                     epsr2 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
+                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max,\
+                            uniform)
                 else:
                     epsr1 = self.Rho_Parameterization(rho, bounds)
                     epsr2 = self.Rho_Parameterization(rho, bounds)
@@ -1155,7 +1250,7 @@ class PMMI:
 
     def Optimize_Multiplexer_Penalize(self, Rho, src_1, src_2, prb_1, prb_2,\
                              alpha, nepochs, bounds = [], plasma = False,\
-                             wp_max = 0, param_evolution = False):
+                             wp_max = 0, uniform = True, param_evolution = False):
         """
         Optimize a multiplexer PMM with leak into opposite gate penalized.
 
@@ -1174,9 +1269,9 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init1 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max, uniform)
                 epsr_init2 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
+                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max, uniform)
             else:
                 epsr_init1 = self.Rho_Parameterization(Rho, bounds)
                 epsr_init2 = self.Rho_Parameterization(Rho, bounds)
@@ -1205,9 +1300,11 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr1 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
+                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
+                            uniform)
                     epsr2 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
+                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max,\
+                            uniform)
                 else:
                     epsr1 = self.Rho_Parameterization(rho, bounds)
                     epsr2 = self.Rho_Parameterization(rho, bounds)
@@ -1242,9 +1339,9 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init1 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max, uniform)
                 epsr_init2 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
+                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max, uniform)
             else:
                 epsr_init1 = self.Rho_Parameterization(Rho, bounds)
                 epsr_init2 = self.Rho_Parameterization(Rho, bounds)
@@ -1273,9 +1370,11 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr1 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
+                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
+                            uniform)
                     epsr2 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max)
+                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max,\
+                            uniform)
                 else:
                     epsr1 = self.Rho_Parameterization(rho, bounds)
                     epsr2 = self.Rho_Parameterization(rho, bounds)
@@ -1311,7 +1410,7 @@ class PMMI:
 
 
     def Optimize_Logic_Gate(self, Rho, src_1, src_2, src_c, prb_n, prb_t, alpha,\
-            nepochs, logic, bounds = [], plasma = False, wp_max = 0,\
+            nepochs, logic, bounds = [], plasma = False, wp_max = 0, uniform = True,\
             param_evolution = False):
         """
         Optimize a logic gate PMM
@@ -1333,7 +1432,7 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max, uniform)
             else:
                 epsr_init = self.Rho_Parameterization(Rho, bounds)
             
@@ -1373,7 +1472,8 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
+                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
+                            uniform)
                 else:
                     epsr = self.Rho_Parameterization(rho, bounds)
                 sim.eps_r = epsr
@@ -1429,7 +1529,7 @@ class PMMI:
             #Begin by running sim with initial parameters to get normalization consts
             if plasma:
                 epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max, uniform)
             else:
                 epsr_init = self.Rho_Parameterization(Rho, bounds)
             
@@ -1469,7 +1569,8 @@ class PMMI:
                 rho = rho.reshape(Rho.shape)
                 if plasma:
                     epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max)
+                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
+                            uniform)
                 else:
                     epsr = self.Rho_Parameterization(rho, bounds)
                 sim.eps_r = epsr
