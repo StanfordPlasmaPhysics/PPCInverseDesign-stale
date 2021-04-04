@@ -37,7 +37,8 @@ rod_eps = 0.01*np.ones((10, 10)) #Rod perm values
 rho = PPC.Eps_to_Rho(epsr = rod_eps, plasma = True, w_src = w, wp_max = wpmax) #Initial Parameters
 
 rho_opt, obj = PPC.Optimize_Waveguide_Penalize(rho, 'src', 'prb', 'prbl',\
-        0.001, 1, plasma = True, wp_max = wpmax, uniform = False, param_evolution = True)
+        0.001, 1, plasma = True, wp_max = wpmax, gamma = gamma, uniform = False,\
+        param_evolution = True)
 
 ## Save parameters and visualize ##############################################
 PPC.Save_Params(rho_opt, 'params/10by10straightwaveguide_ez_w025_wp_pen.csv')
