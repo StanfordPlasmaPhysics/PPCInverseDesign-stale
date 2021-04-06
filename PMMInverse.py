@@ -625,7 +625,7 @@ class PMMI:
     ###########################################################################
     ## Parameterization Functions
     ###########################################################################
-    def Mask_Combine_Rho(self, train_epsr, elem_locs, bounds, eps_bg_des):
+    def Mask_Combine_Rho(self, train_epsr, elem_locs, bounds, eps_bg_des, Complex = False):
         """
         Utility function for combining the design region with its trainable 
         elements and the static region
@@ -639,15 +639,21 @@ class PMMI:
             the trainable elements
             eps_bg_des: Float, permittivity of the background in the design region
         """
-        train = (bounds[1] - bounds[0])*train_epsr*(elem_locs!=0).astype(np.complex128)\
-                + bounds[0]*(elem_locs!=0).astype(np.complex128)
-        design = eps_bg_des*self.design_region*(elem_locs==0).astype(np.complex128)
-        bckgd = self.static_elems*(self.design_region==0).astype(np.complex128)
+        if Complex:
+            train = (bounds[1] - bounds[0])*train_epsr*(elem_locs!=0).astype(np.complex128)\
+                    + bounds[0]*(elem_locs!=0).astype(np.complex128)
+            design = eps_bg_des*self.design_region*(elem_locs==0).astype(np.complex128)
+            bckgd = self.static_elems*(self.design_region==0).astype(np.complex128)
+        else:
+            train = (bounds[1] - bounds[0])*train_epsr*(elem_locs!=0).astype(np.float)\
+                    + bounds[0]*(elem_locs!=0).astype(np.float)
+            design = eps_bg_des*self.design_region*(elem_locs==0).astype(np.float)
+            bckgd = self.static_elems*(self.design_region==0).astype(np.float)
 
         return train + design + bckgd
 
 
-    def Mask_Combine_Rho_wp(self, train_epsr, elem_locs, eps_bg_des):
+    def Mask_Combine_Rho_wp(self, train_epsr, elem_locs, eps_bg_des, Complex = False):
         """
         Utility function for combining the design region with its trainable 
         elements and the static region when mapping directly from wp values
@@ -660,9 +666,14 @@ class PMMI:
             w_src: Source frequency
             eps_bg_des: Float, permittivity of the background in the design region
         """
-        train = (train_epsr)*(elem_locs!=0).astype(np.complex128)
-        design = eps_bg_des*self.design_region*(elem_locs==0).astype(np.complex128)
-        bckgd = self.static_elems*(self.design_region==0).astype(np.complex128)
+        if Complex:
+            train = (train_epsr)*(elem_locs!=0).astype(np.complex128)
+            design = eps_bg_des*self.design_region*(elem_locs==0).astype(np.complex128)
+            bckgd = self.static_elems*(self.design_region==0).astype(np.complex128)
+        else:
+            train = (train_epsr)*(elem_locs!=0).astype(np.float)
+            design = eps_bg_des*self.design_region*(elem_locs==0).astype(np.float)
+            bckgd = self.static_elems*(self.design_region==0).astype(np.float)
 
         return train + design + bckgd
 
@@ -832,12 +843,14 @@ class PMMI:
             w_src: Source frequency, non-dimensionalized
             eps_bg_des: background epsilon for the design/optimization region
         """
+        if gamma > 0:
+            Complex = True
         if uniform:
             train_epsr, elem_locs = self.Scale_Rho_wp(rho, w_src, wp_max, gamma)
         else:
             train_epsr, elem_locs = self.Scale_Rho_wp_parabolic(rho, w_src, wp_max, gamma)
 
-        return self.Mask_Combine_Rho_wp(train_epsr, elem_locs, eps_bg_des)
+        return self.Mask_Combine_Rho_wp(train_epsr, elem_locs, eps_bg_des, Complex = Complex)
 
 
     def gamma(self, gamma_Hz):
