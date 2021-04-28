@@ -843,6 +843,7 @@ class PMMI:
             w_src: Source frequency, non-dimensionalized
             eps_bg_des: background epsilon for the design/optimization region
         """
+        Complex = False
         if gamma > 0:
             Complex = True
         if uniform:
