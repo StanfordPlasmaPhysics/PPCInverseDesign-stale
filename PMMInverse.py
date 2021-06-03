@@ -475,7 +475,8 @@ class PMMI:
 
 
     def Viz_Sim_abs_opt(self, rho, src_names, savepath, bounds = [], plasma = False,\
-                        show = True, mult = False, wp_max = 0, gamma = 0, uniform = True):
+                        show = True, mult = False, wp_max = 0, gamma = 0, uniform = True,\
+                        perturb = 0):
         """
         Solve and visualize an optimized simulation with certain sources active
         
@@ -505,9 +506,10 @@ class PMMI:
                 src = self.sources[src_names[i]][0]
 
             if plasma:
-                epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max, gamma, uniform)
+                epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max, gamma,\
+                                                        uniform, perturb = perturb)
             else:
-                epsr_opt = self.Rho_Parameterization(rho, bounds)
+                epsr_opt = self.Rho_Parameterization(rho, bounds, perturb = perturb)
 
             if pol == 'hz':
                 simulation = fdfd_hz(w, self.dl, epsr_opt, [self.Npml, self.Npml])
@@ -538,7 +540,8 @@ class PMMI:
 
 
     def Viz_Sim_fields_opt(self, rho, src_names, savepath, bounds = [], plasma = False,\
-                           show = True, mult = False, wp_max = 0, gamma = 0, uniform = True):
+                           show = True, mult = False, wp_max = 0, gamma = 0, uniform = True,\
+                           perturb = 0):
         """
         Solve and visualize an optimized simulation with certain sources active
         
@@ -568,9 +571,10 @@ class PMMI:
                 src = self.sources[src_names[i]][0]
 
             if plasma:
-                epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max, gamma, uniform)
+                epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max, gamma,\
+                                                        uniform, perturb = perturb)
             else:
-                epsr_opt = self.Rho_Parameterization(rho, bounds)
+                epsr_opt = self.Rho_Parameterization(rho, bounds, perturb = perturb)
 
             if pol == 'hz':
                 simulation = fdfd_hz(w, self.dl, epsr_opt, [self.Npml, self.Npml])
@@ -697,7 +701,7 @@ class PMMI:
         return train_epsr, elem_locations
 
 
-    def Scale_Rho_wp(self, rho, w_src, wp_max = 0, gamma = 0):
+    def Scale_Rho_wp(self, rho, w_src, wp_max = 0, gamma = 0, perturb = 0):
         """
         Uses the Drude dispersion along with an arctan barrier to map the
         parameters to relative permittivity
@@ -712,7 +716,12 @@ class PMMI:
         denom = w_src**2 + 1j*gamma*w_src
         if wp_max > 0:
             rho = (wp_max/1.5)*npa.arctan(rho/(wp_max/7.5))
-        rho = npa.subtract(1, npa.divide(npa.power(npa.abs(rho), 2), denom))
+        if perturb > 0:
+            wp2 = npa.power(npa.abs(rho), 2)
+            wp2p = wp2 + np.random.normal(loc = 0, scale = perturb*wp2)
+            rho = npa.subtract(1, npa.divide(wp2p, denom))
+        else:
+            rho = npa.subtract(1, npa.divide(npa.power(npa.abs(rho), 2), denom))
         train_epsr = np.zeros(self.train_elems[0].shape)
         elem_locations = np.zeros(self.train_elems[0].shape)
         for i in range(len(rho)):
@@ -722,7 +731,7 @@ class PMMI:
         return train_epsr, elem_locations
 
 
-    def Scale_Rho_wp_parabolic(self, rho, w_src, wp_max = 0, gamma = 0):
+    def Scale_Rho_wp_parabolic(self, rho, w_src, wp_max = 0, gamma = 0, perturb = 0):
         """
         Uses the Drude dispersion along with an arctan barrier to map the
         parameters to relative permittivity according to a parabolic density
@@ -742,12 +751,22 @@ class PMMI:
         elem_locations = np.zeros(self.train_elems[0].shape)
         if wp_max > 0:
             rho = (wp_max/1.5)*npa.arctan(rho/(wp_max/7.5))
-        for r in range(self.rod_shells):
-            rho_shell = npa.subtract(1, npa.divide(npa.multiply(npa.power(npa.abs(rho), 2),\
-                        4*(4.6/6.5)*(1-r**2/(self.rod_shells-1)**2)), denom))
-            for i in range(len(rho_shell)):
-                train_epsr = train_epsr + rho_shell[i]*self.train_elems[i*self.rod_shells + r]
-                elem_locations += self.train_elems[i*self.rod_shells + r]
+        if perturb > 0:
+            wp2 = npa.power(npa.abs(rho), 2)
+            wp2p = wp2 + np.random.normal(loc = 0, scale = perturb*wp2)
+            for r in range(self.rod_shells):
+                rho_shell = npa.subtract(1, npa.divide(npa.multiply(wp2p,\
+                            4*(4.6/6.5)*(1-r**2/(self.rod_shells-1)**2)), denom))
+                for i in range(len(rho_shell)):
+                    train_epsr = train_epsr + rho_shell[i]*self.train_elems[i*self.rod_shells + r]
+                    elem_locations += self.train_elems[i*self.rod_shells + r]
+        else:
+            for r in range(self.rod_shells):
+                rho_shell = npa.subtract(1, npa.divide(npa.multiply(npa.power(npa.abs(rho), 2),\
+                            4*(4.6/6.5)*(1-r**2/(self.rod_shells-1)**2)), denom))
+                for i in range(len(rho_shell)):
+                    train_epsr = train_epsr + rho_shell[i]*self.train_elems[i*self.rod_shells + r]
+                    elem_locations += self.train_elems[i*self.rod_shells + r]
         
         return train_epsr, elem_locations
 
@@ -769,7 +788,7 @@ class PMMI:
             return npa.tan(((epsr-bounds[0])/(bounds[1]-bounds[0])-0.5)*np.pi)
 
     
-    def Rho_to_Eps(self, rho, bounds=[], plasma = False, w_src = 1, wp_max = 0):
+    def Rho_to_Eps(self, rho, bounds=[], plasma = False, w_src = 1, wp_max = 0, gamma = 0):
         """
         Returns permittivity values associated with a parameter matrix
 
@@ -788,7 +807,7 @@ class PMMI:
 
     def Eps_to_Rho_wp(self, epsr, w_src, wp_max = 0):
         """
-        Returns parameters associated with array of values of epsr
+        Returns parameters associated with array of *real* values of epsr
 
         Args:
             epsr: array of relative permittivity values
@@ -804,7 +823,7 @@ class PMMI:
 
 
     
-    def Rho_to_Eps_wp(self, rho, w_src, wp_max = 0):
+    def Rho_to_Eps_wp(self, rho, w_src, wp_max = 0, gamma = 0):
         """
         Returns permittivity values associated with a parameter matrix
 
@@ -813,7 +832,11 @@ class PMMI:
             w_src: source frequency
         """
         if wp_max > 0:
-            return 1-((wp_max/1.5)*npa.arctan(rho/(wp_max/7.5)))**2/w_src**2
+            if gamma > 0:
+                denom = w_src**2 + 1j*gamma*w_src
+                return 1-((wp_max/1.5)*npa.arctan(rho/(wp_max/7.5)))**2/denom
+            else:
+                return 1-((wp_max/1.5)*npa.arctan(rho/(wp_max/7.5)))**2/w_src**2
         else:
             return 1-(rho)**2/w_src**2
   
@@ -833,7 +856,7 @@ class PMMI:
 
 
     def Rho_Parameterization_wp(self, rho, w_src, wp_max = 0, gamma = 0,\
-                                uniform = True, eps_bg_des = 1):
+                                uniform = True, eps_bg_des = 1, perturb = 0):
         """
         Apply scaling/parameterization and create a permittivity matrix when
         mapping plasma frequency to permittivity
@@ -847,9 +870,11 @@ class PMMI:
         if gamma > 0:
             Complex = True
         if uniform:
-            train_epsr, elem_locs = self.Scale_Rho_wp(rho, w_src, wp_max, gamma)
+            train_epsr, elem_locs = self.Scale_Rho_wp(rho, w_src, wp_max, gamma,\
+                                                      perturb)
         else:
-            train_epsr, elem_locs = self.Scale_Rho_wp_parabolic(rho, w_src, wp_max, gamma)
+            train_epsr, elem_locs = self.Scale_Rho_wp_parabolic(rho, w_src, wp_max,\
+                                                                gamma, perturb)
 
         return self.Mask_Combine_Rho_wp(train_epsr, elem_locs, eps_bg_des, Complex = Complex)
 
@@ -1661,7 +1686,7 @@ class PMMI:
     ###########################################################################
     ## Params i/o
     ###########################################################################
-    def Params_to_Exp(self, rho, src, bounds = [], plasma = False, nu_col = 0, wp_max = 0):
+    def Params_to_Exp(self, rho, src, bounds = [], plasma = False, wp_max = 0):
         """
         Output experimental data needed to rebuild a certain design
 
@@ -1670,10 +1695,10 @@ class PMMI:
             src: key for active source in sources dict
             bounds: max and min perm values for training
             plasma: bool specifying if params map to wp
-            nu_col: supposed collision frequency in c/a units
+            gamma: collision frequency (loss) in c/a units
         """
         if plasma:
-            self.Params_to_Exp_wp(rho, src, nu_col, wp_max)
+            self.Params_to_Exp_wp(rho, src, wp_max)
         else:
             print("The lattice frequency is: ", c/self.a/(10**9)," GHz")
             print("The source frequency is: ", self.sources[src][1]/2/np.pi/(10**9), " GHz")
@@ -1682,7 +1707,7 @@ class PMMI:
                 (self.sources[src][1]**2+(nu_col*2*np.pi*c/self.a)**2))/(10**9))
 
 
-    def Params_to_Exp_wp(self, rho, src, nu_col = 0, wp_max = 0):
+    def Params_to_Exp_wp(self, rho, src, wp_max = 0):
         """
         Output experimental data needed to rebuild a certain design
 
@@ -1694,7 +1719,7 @@ class PMMI:
         """
         print("The lattice frequency is: ", c/self.a/(10**9)," GHz")
         print("The source frequency is: ", self.sources[src][1]/2/np.pi/(10**9), " GHz")
-        print("The plasma frequencies (GHz) necessary to achieve this design are:")
+        print("The plasma frequencies (GHz, corresponding to average density in discharge) necessary to achieve this design are:")
         if wp_max > 0:
             print((wp_max/1.5)*npa.arctan(npa.abs(rho)/(wp_max/7.5))*c/self.a/(10**9))
         else:
