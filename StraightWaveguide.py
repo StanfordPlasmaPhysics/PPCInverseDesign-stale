@@ -2,7 +2,7 @@ import numpy as np
 from PMMInverse import PMMI
 
 a = 0.015
-res = 30
+res = 50
 nx = 20
 ny = 20
 dpml = 2
@@ -33,17 +33,19 @@ PPC.Add_Source(np.array([3,9]), np.array([3,11]), w, 'src', 'ez')
 PPC.Add_Probe(np.array([17,9]), np.array([17,11]), w, 'prb', 'ez')
 PPC.Add_Probe(np.array([9,17]), np.array([11,17]), w, 'prbl', 'ez')
 
-rod_eps = 0.01*np.ones((10, 10)) #Rod perm values
-rho = PPC.Eps_to_Rho(epsr = rod_eps, plasma = True, w_src = w, wp_max = wpmax) #Initial Parameters
+#rod_eps = 0.999*np.ones((10, 10)) #Rod perm values
+#rho = PPC.Eps_to_Rho(epsr = rod_eps, plasma = True, w_src = w, wp_max = wpmax) #Initial Parameters
+rho = PPC.Read_Params('params/10by10straightwaveguide_hz_w025_wpmax035_gam1GHz_res50_pen_r10.csv')
 
 rho_opt, obj = PPC.Optimize_Waveguide_Penalize(rho, 'src', 'prb', 'prbl',\
-        0.001, 1, plasma = True, wp_max = wpmax, gamma = gamma, uniform = False,\
-        param_evolution = True)
+               0.00001, 500, plasma = True, wp_max = wpmax, gamma = gamma, uniform = False,\
+               param_evolution = True)
 
 ## Save parameters and visualize ##############################################
-PPC.Save_Params(rho_opt, 'params/10by10straightwaveguide_ez_w025_wp_pen.csv')
+PPC.Save_Params(rho_opt, 'params/10by10straightwaveguide_hz_w025_wpmax035_gam1GHz_res50_pen_r11.csv')
 print(PPC.Rho_to_Eps(rho = rho_opt, plasma = True, w_src = w))
 PPC.Params_to_Exp(rho = rho_opt, src = 'src', plasma = True)
-PPC.Viz_Sim_abs_opt(rho_opt, ['src'], 'plots/StraightWaveguide_Ez_w025_wp_pen.pdf',\
-                    plasma = True, wp_max = wpmax, uniform = False)
-PPC.Viz_Obj(obj, 'plots/StraightWaveguide10by10_Ez_w025_wp_obj_pen.pdf')
+PPC.Viz_Sim_abs_opt(rho_opt, ['src'], 'plots/StraightWaveguide_Hz_w025_wpmax035_gam1GHz_res50_pen_r11.pdf',\
+                    plasma = True, wp_max = wpmax, uniform = False, gamma = gamma)
+PPC.Save_Params(obj, 'plots/Straightwaveguide10by10_Hz_w025_wpmax035_gam1GHz_res50_obj_pen_r11.csv')
+PPC.Viz_Obj(obj, 'plots/StraightWaveguide10by10_Hz_w025_wpmax035_gam1GHz_res50_obj_pen_r11.pdf')
