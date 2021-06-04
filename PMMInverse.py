@@ -488,9 +488,16 @@ class PMMI:
             plasma: bool specifying if params map to wp
             show: bool determining if the plot is shown
             mult: bool determining if multiple sources are activated at once
+            perturb: sigma value for gaussian perturbation of rods. 0.05 would
+                     result in random perturbations of each element of ~5%.
         """
         fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=False,\
                                figsize=(9*len(src_names),4))
+
+        if perturb > 0:
+            pmat = self.Pmat(rho, perturb)
+        else:
+            pmat = np.empty(0)
         for i in range(len(src_names)):
             if mult:
                 w_src = self.sources[src_names[i][0]][1]*self.a/2/np.pi/c
@@ -506,10 +513,11 @@ class PMMI:
                 src = self.sources[src_names[i]][0]
 
             if plasma:
+                print(pmat)
                 epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max, gamma,\
-                                                        uniform, perturb = perturb)
+                                                        uniform, pmat = pmat)
             else:
-                epsr_opt = self.Rho_Parameterization(rho, bounds, perturb = perturb)
+                epsr_opt = self.Rho_Parameterization(rho, bounds, pmat = pmat)
 
             if pol == 'hz':
                 simulation = fdfd_hz(w, self.dl, epsr_opt, [self.Npml, self.Npml])
@@ -553,9 +561,15 @@ class PMMI:
             plasma: bool specifying if params map to wp
             show: bool determining if the plot is shown
             mult: bool determining if multiple sources are activated at once
+            perturb: sigma value for gaussian perturbation of rods. 0.05 would
+                     result in random perturbations of each element of ~5%.
         """
         fig, ax = plt.subplots(1, len(src_names)+1, constrained_layout=False,\
                                figsize=(9*len(src_names),4))
+        if perturb > 0:
+            pmat = self.Pmat(rho, perturb)
+        else:
+            pmat = np.empty(1)
         for i in range(len(src_names)):
             if mult:
                 w_src = self.sources[src_names[i][0]][1]*self.a/2/np.pi/c
@@ -572,9 +586,9 @@ class PMMI:
 
             if plasma:
                 epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max, gamma,\
-                                                        uniform, perturb = perturb)
+                                                        uniform, pmat = pmat)
             else:
-                epsr_opt = self.Rho_Parameterization(rho, bounds, perturb = perturb)
+                epsr_opt = self.Rho_Parameterization(rho, bounds, pmat = pmat)
 
             if pol == 'hz':
                 simulation = fdfd_hz(w, self.dl, epsr_opt, [self.Npml, self.Npml])
@@ -701,7 +715,7 @@ class PMMI:
         return train_epsr, elem_locations
 
 
-    def Scale_Rho_wp(self, rho, w_src, wp_max = 0, gamma = 0, perturb = 0):
+    def Scale_Rho_wp(self, rho, w_src, wp_max = 0, gamma = 0, pmat = np.empty(0)):
         """
         Uses the Drude dispersion along with an arctan barrier to map the
         parameters to relative permittivity
@@ -711,14 +725,16 @@ class PMMI:
             w_src: Non-dimensionalized operating frequency
             wp_max: Approximate maximum non-dimensionalized plasma frequency
             gamma: Non-dimensionalized collision frequency
+            pmat: perturbation matrix
         """
         rho = rho.flatten()
+        pmat = pmat.flatten()
         denom = w_src**2 + 1j*gamma*w_src
         if wp_max > 0:
             rho = (wp_max/1.5)*npa.arctan(rho/(wp_max/7.5))
-        if perturb > 0:
+        if pmat.shape == rho.shape:
             wp2 = npa.power(npa.abs(rho), 2)
-            wp2p = wp2 + np.random.normal(loc = 0, scale = perturb*wp2)
+            wp2p = npa.abs(wp2 + npa.multiply(wp2, pmat))
             rho = npa.subtract(1, npa.divide(wp2p, denom))
         else:
             rho = npa.subtract(1, npa.divide(npa.power(npa.abs(rho), 2), denom))
@@ -731,7 +747,7 @@ class PMMI:
         return train_epsr, elem_locations
 
 
-    def Scale_Rho_wp_parabolic(self, rho, w_src, wp_max = 0, gamma = 0, perturb = 0):
+    def Scale_Rho_wp_parabolic(self, rho, w_src, wp_max = 0, gamma = 0, pmat = np.empty(0)):
         """
         Uses the Drude dispersion along with an arctan barrier to map the
         parameters to relative permittivity according to a parabolic density
@@ -744,16 +760,18 @@ class PMMI:
             w_src: Non-dimensionalized operating frequency
             wp_max: Approximate maximum non-dimensionalized plasma frequency
             gamma: Non-dimensionalized collision frequency
+            pmat: perturbation matrix
         """
         rho = rho.flatten()
+        pmat = pmat.flatten()
         denom = w_src**2 + 1j*gamma*w_src
         train_epsr = np.zeros(self.train_elems[0].shape)
         elem_locations = np.zeros(self.train_elems[0].shape)
         if wp_max > 0:
             rho = (wp_max/1.5)*npa.arctan(rho/(wp_max/7.5))
-        if perturb > 0:
+        if pmat.shape == rho.shape:
             wp2 = npa.power(npa.abs(rho), 2)
-            wp2p = wp2 + np.random.normal(loc = 0, scale = perturb*wp2)
+            wp2p = npa.abs(wp2 + npa.multiply(wp2, pmat))
             for r in range(self.rod_shells):
                 rho_shell = npa.subtract(1, npa.divide(npa.multiply(wp2p,\
                             4*(4.6/6.5)*(1-r**2/(self.rod_shells-1)**2)), denom))
@@ -856,7 +874,7 @@ class PMMI:
 
 
     def Rho_Parameterization_wp(self, rho, w_src, wp_max = 0, gamma = 0,\
-                                uniform = True, eps_bg_des = 1, perturb = 0):
+                                uniform = True, eps_bg_des = 1, pmat = np.empty(0)):
         """
         Apply scaling/parameterization and create a permittivity matrix when
         mapping plasma frequency to permittivity
@@ -865,18 +883,33 @@ class PMMI:
             rho: parameters to be optimized
             w_src: Source frequency, non-dimensionalized
             eps_bg_des: background epsilon for the design/optimization region
+            pmat: perturbation matrix
         """
         Complex = False
         if gamma > 0:
             Complex = True
         if uniform:
             train_epsr, elem_locs = self.Scale_Rho_wp(rho, w_src, wp_max, gamma,\
-                                                      perturb)
+                                                      pmat)
         else:
             train_epsr, elem_locs = self.Scale_Rho_wp_parabolic(rho, w_src, wp_max,\
-                                                                gamma, perturb)
+                                                                gamma, pmat)
 
         return self.Mask_Combine_Rho_wp(train_epsr, elem_locs, eps_bg_des, Complex = Complex)
+
+
+    def Pmat(self, rho, perturb):
+        """
+        Create perturbation matrix which is composed of mean-0 gaussian RV
+        with std. dev = perturb
+
+        Args:
+            rho: array that is same size as the array that determines element
+                 permittivities.
+            perturb: sigma value for gaussian perturbation of rods. 0.05 would
+                     result in random perturbations of each element of ~5%.
+        """
+        return np.random.normal(loc = 0, scale = perturb*np.ones_like(rho))
 
 
     def gamma(self, gamma_Hz):
@@ -902,6 +935,7 @@ class PMMI:
             alpha: Adam learning rate.
             nepochs: Number of training epochs.
             bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
+                return 
             plasma: bool specifying if params map to wp
         """
         if self.sources[src][2] == 'hz':
