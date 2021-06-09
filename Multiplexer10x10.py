@@ -34,12 +34,12 @@ PPC.Add_Source(np.array([3,9]), np.array([3,11]), w2, 'src_2', 'ez')
 PPC.Add_Probe(np.array([17,6]), np.array([17,8]), w1, 'prb_1', 'ez')
 PPC.Add_Probe(np.array([17,12]), np.array([17,14]), w2, 'prb_2', 'ez')
 
-#rod_eps = 0.9*np.ones((10, 10)) #Rod perm values
-#rho = PPC.Eps_to_Rho(epsr = rod_eps, plasma = True, w_src = w1) #Initial Parameters
-rho = PPC.Read_Params('run_params/iter_300.csv')
+rod_eps = 0.9*np.ones((10, 10)) #Rod perm values
+rho = PPC.Eps_to_Rho(epsr = rod_eps, plasma = True, w_src = w1) #Initial Parameters
+#rho = PPC.Read_Params('run_params/iter_300.csv')
 
 rho_opt, obj = PPC.Optimize_Multiplexer_Penalize(rho, 'src_1', 'src_2', 'prb_1',\
-                                            'prb_2', 0.00005, 200, plasma = True,\
+                                            'prb_2', 0.00001, 500, plasma = True,\
                                              wp_max = wpmax, gamma = gamma,\
                                              uniform = False, param_evolution = True)
 
