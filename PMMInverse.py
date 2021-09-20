@@ -513,7 +513,6 @@ class PMMI:
                 src = self.sources[src_names[i]][0]
 
             if plasma:
-                print(pmat)
                 epsr_opt = self.Rho_Parameterization_wp(rho, w_src, wp_max, gamma,\
                                                         uniform, pmat = pmat)
             else:
