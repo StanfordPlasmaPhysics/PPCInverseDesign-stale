@@ -37,9 +37,9 @@ rho = PPC.Eps_to_Rho(epsr = rod_eps, plasma = True, w_src = w, wp_max = wpmax) #
 #Norms = PPC.Read_Params('params/10by10bentwavegguide_norms_ez_w025_wpmax035_gam1GHz_res80_coldstart.csv')
 
 rho_opt, obj, E0, E0l = PPC.Optimize_Waveguide_Penalize(rho, 'src', 'prb', 'prbl',\
-               0.001, 250, plasma = True, wp_max = wpmax, gamma = gamma, uniform = False,\
-               param_evolution = True, E0 = Norms[0], E0l = Norms[1])
-#               param_evolution = True)
+               0.001, 100, plasma = True, wp_max = wpmax, gamma = gamma, uniform = False,\
+               param_evolution = True)
+            #  param_evolution = True, E0 = Norms[0], E0l = Norms[1])
 
 ## Save parameters and visualize ##############################################
 PPC.Save_Params(rho_opt, 'params/10by10bentwaveguide_ez_w025_wpmax035_gam1GHz_res80_coldstart_r1.csv')

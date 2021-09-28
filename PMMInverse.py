@@ -950,7 +950,7 @@ class PMMI:
             sim = fdfd_hz(self.sources[src][1], self.dl, epsr_init,\
                            [self.Npml, self.Npml])
             Ex, _, _ = sim.solve(self.sources[src][0])
-            if E0 == None
+            if E0 == None:
                 E0 = mode_overlap(Ex, self.probes[prb][0])
             
             #Define objective
