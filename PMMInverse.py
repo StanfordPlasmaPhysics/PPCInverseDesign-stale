@@ -746,11 +746,12 @@ class PMMI:
         return train_epsr, elem_locations
 
 
-    def Scale_Rho_wp_parabolic(self, rho, w_src, wp_max = 0, gamma = 0, pmat = np.empty(0)):
+    def Scale_Rho_wp_polynomial(self, rho, w_src, wp_max = 0, gamma = 0,\
+                                pmat = np.empty(0)):
         """
         Uses the Drude dispersion along with an arctan barrier to map the
-        parameters to relative permittivity according to a parabolic density
-        profile
+        parameters to relative permittivity according to a 6th order polynomial
+        density profile
 
         Args:
             rho: Parameters being optimized. In this case, these parameters are
@@ -773,7 +774,7 @@ class PMMI:
             wp2p = npa.abs(wp2 + npa.multiply(wp2, pmat))
             for r in range(self.rod_shells):
                 rho_shell = npa.subtract(1, npa.divide(npa.multiply(wp2p,\
-                            4*(4.6/6.5)*(1-r**2/(self.rod_shells-1)**2)), denom))
+                            4*((4.6/6.5)**2)*(1-r**6/(self.rod_shells-1)**6)/3), denom))
                 for i in range(len(rho_shell)):
                     train_epsr = train_epsr + rho_shell[i]*self.train_elems[i*self.rod_shells + r]
                     elem_locations += self.train_elems[i*self.rod_shells + r]
@@ -891,7 +892,7 @@ class PMMI:
             train_epsr, elem_locs = self.Scale_Rho_wp(rho, w_src, wp_max, gamma,\
                                                       pmat)
         else:
-            train_epsr, elem_locs = self.Scale_Rho_wp_parabolic(rho, w_src, wp_max,\
+            train_epsr, elem_locs = self.Scale_Rho_wp_polynomial(rho, w_src, wp_max,\
                                                                 gamma, pmat)
 
         return self.Mask_Combine_Rho_wp(train_epsr, elem_locs, eps_bg_des, Complex = Complex)
@@ -923,7 +924,7 @@ class PMMI:
     ###########################################################################
     def Optimize_Waveguide(self, Rho, src, prb, alpha, nepochs, bounds = [],\
             plasma = False, wp_max = 0, gamma = 0, uniform = True,\
-            param_evolution = False):
+            param_evolution = False, E0 = None):
         """
         Optimize a waveguide PMM
 
@@ -936,6 +937,8 @@ class PMMI:
             bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
                 return 
             plasma: bool specifying if params map to wp
+            E0: Objective normalization constant, allows objective to continue
+                to be tracked over several runs
         """
         if self.sources[src][2] == 'hz':
             #Begin by running sim with initial parameters to get normalization consts
@@ -947,7 +950,8 @@ class PMMI:
             sim = fdfd_hz(self.sources[src][1], self.dl, epsr_init,\
                            [self.Npml, self.Npml])
             Ex, _, _ = sim.solve(self.sources[src][0])
-            E0 = mode_overlap(Ex, self.probes[prb][0])
+            if E0 == None
+                E0 = mode_overlap(Ex, self.probes[prb][0])
             
             #Define objective
             def objective(rho):
@@ -987,7 +991,7 @@ class PMMI:
                                     objective_jac, Nsteps = nepochs,\
                                     direction = 'max', step_size = alpha)
 
-            return rho_optimum.reshape(Rho.shape), obj
+            return rho_optimum.reshape(Rho.shape), obj, E0
 
         elif self.sources[src][2] == 'ez':
             #Begin by running sim with initial parameters to get normalization consts
@@ -1000,7 +1004,8 @@ class PMMI:
             sim = fdfd_ez(self.sources[src][1], self.dl, epsr_init,\
                            [self.Npml, self.Npml])
             _, _, Ez = sim.solve(self.sources[src][0])
-            E0 = mode_overlap(Ez, self.probes[prb][0])
+            if E0 == None:
+                E0 = mode_overlap(Ez, self.probes[prb][0])
             
             #Define objective
             def objective(rho):
@@ -1040,7 +1045,7 @@ class PMMI:
                                     objective_jac, Nsteps = nepochs,\
                                     direction = 'max', step_size = alpha)
 
-            return rho_optimum.reshape(Rho.shape), obj
+            return rho_optimum.reshape(Rho.shape), obj, E0
 
         else:
             raise RuntimeError("The source polarization is not valid.")
@@ -1048,7 +1053,7 @@ class PMMI:
 
     def Optimize_Waveguide_Penalize(self, Rho, src, prb, prbl, alpha, nepochs,\
             bounds = [], plasma = False, wp_max = 0, gamma = 0, uniform = True,\
-            param_evolution = False):
+            param_evolution = False, E0 = None, E0l = None):
         """
         Optimize a waveguide PMM
 
@@ -1061,6 +1066,7 @@ class PMMI:
             nepochs: Number of training epochs.
             bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
             plasma: bool specifying if params map to wp
+            E0,E0l: Field normalization values
         """
         if self.sources[src][2] == 'hz':
             #Begin by running sim with initial parameters to get normalization consts
@@ -1073,8 +1079,10 @@ class PMMI:
             sim = fdfd_hz(self.sources[src][1], self.dl, epsr_init,\
                            [self.Npml, self.Npml])
             Ex, _, _ = sim.solve(self.sources[src][0])
-            E0 = mode_overlap(Ex, self.probes[prb][0])
-            E0l = field_mag_int(Ex, self.probes[prbl][3])
+            if E0 == None:
+                E0 = mode_overlap(Ex, self.probes[prb][0])
+            if E0l == None:
+                E0l = field_mag_int(Ex, self.probes[prbl][3])
             
             #Define objective
             def objective(rho):
@@ -1115,7 +1123,7 @@ class PMMI:
                                     objective_jac, Nsteps = nepochs,\
                                     direction = 'max', step_size = alpha)
 
-            return rho_optimum.reshape(Rho.shape), obj
+            return rho_optimum.reshape(Rho.shape), obj, E0, E0l
 
         elif self.sources[src][2] == 'ez':
             #Begin by running sim with initial parameters to get normalization consts
@@ -1128,8 +1136,10 @@ class PMMI:
             sim = fdfd_ez(self.sources[src][1], self.dl, epsr_init,\
                            [self.Npml, self.Npml])
             _, _, Ez = sim.solve(self.sources[src][0])
-            E0 = mode_overlap(Ez, self.probes[prb][0])
-            E0l = field_mag_int(Ez, self.probes[prbl][3])
+            if E0 == None:
+                E0 = mode_overlap(Ez, self.probes[prb][0])
+            if E0l == None:
+                E0l = field_mag_int(Ez, self.probes[prbl][3])
             
             #Define objective
             def objective(rho):
@@ -1170,7 +1180,7 @@ class PMMI:
                                     objective_jac, Nsteps = nepochs,\
                                     direction = 'max', step_size = alpha)
 
-            return rho_optimum.reshape(Rho.shape), obj
+            return rho_optimum.reshape(Rho.shape), obj, E0, E0l
 
         else:
             raise RuntimeError("The source polarization is not valid.")
@@ -1179,7 +1189,8 @@ class PMMI:
     def Optimize_Multiplexer(self, Rho, src_1, src_2, prb_1, prb_2,\
                              alpha, nepochs, bounds = [], plasma = False,\
                              wp_max = 0, gamma = 0, uniform = True,\
-                             param_evolution = False):
+                             param_evolution = False, E01 = None,\
+                             E02 = None):
         """
         Optimize a multiplexer PMM
 
@@ -1212,8 +1223,10 @@ class PMMI:
                            [self.Npml, self.Npml])
             Ex1, _, _ = sim1.solve(self.sources[src_1][0])
             Ex2, _, _ = sim2.solve(self.sources[src_2][0])
-            E01 = mode_overlap(Ex1, self.probes[prb_1][0])
-            E02 = mode_overlap(Ex2, self.probes[prb_2][0])
+            if E01 == None:
+                E01 = mode_overlap(Ex1, self.probes[prb_1][0])
+            if E02 == None:
+                E02 = mode_overlap(Ex2, self.probes[prb_2][0])
             
             #Define objective
             def objective(rho):
@@ -1260,7 +1273,7 @@ class PMMI:
                                     objective_jac, Nsteps = nepochs,\
                                     direction = 'max', step_size = alpha)
 
-            return rho_optimum.reshape(Rho.shape), obj
+            return rho_optimum.reshape(Rho.shape), obj, E01, E02
 
         elif self.sources[src_1][2] == 'ez' and self.sources[src_2][2] == 'ez':
             #Begin by running sim with initial parameters to get normalization consts
@@ -1280,8 +1293,10 @@ class PMMI:
                            [self.Npml, self.Npml])
             _, _, Ez1 = sim1.solve(self.sources[src_1][0])
             _, _, Ez2 = sim2.solve(self.sources[src_2][0])
-            E01 = mode_overlap(Ez1, self.probes[prb_1][0])
-            E02 = mode_overlap(Ez2, self.probes[prb_2][0])
+            if E01 == None:
+                E01 = mode_overlap(Ez1, self.probes[prb_1][0])
+            if E01 == None:
+                E02 = mode_overlap(Ez2, self.probes[prb_2][0])
             
             #Define objective
             def objective(rho):
@@ -1328,7 +1343,7 @@ class PMMI:
                                     objective_jac, Nsteps = nepochs,\
                                     direction = 'max', step_size = alpha)
 
-            return rho_optimum.reshape(Rho.shape), obj
+            return rho_optimum.reshape(Rho.shape), obj, E01, E02
 
         else:
             raise RuntimeError("The two sources must have the same polarization.")
@@ -1337,7 +1352,8 @@ class PMMI:
     def Optimize_Multiplexer_Penalize(self, Rho, src_1, src_2, prb_1, prb_2,\
                              alpha, nepochs, bounds = [], plasma = False,\
                              wp_max = 0, gamma = 0, uniform = True,\
-                             param_evolution = False):
+                             param_evolution = False, E01 = None,\
+                             E02 = None, E01l = None, E02l = None):
         """
         Optimize a multiplexer PMM with leak into opposite gate penalized.
 
@@ -1422,7 +1438,7 @@ class PMMI:
                                     objective_jac, Nsteps = nepochs,\
                                     direction = 'max', step_size = alpha)
 
-            return rho_optimum.reshape(Rho.shape), obj
+            return rho_optimum.reshape(Rho.shape), obj, E01, E02, E01l, E02l
 
         elif self.sources[src_1][2] == 'ez' and self.sources[src_2][2] == 'ez':
             #Begin by running sim with initial parameters to get normalization consts
@@ -1494,7 +1510,7 @@ class PMMI:
                                     objective_jac, Nsteps = nepochs,\
                                     direction = 'max', step_size = alpha)
 
-            return rho_optimum.reshape(Rho.shape), obj
+            return rho_optimum.reshape(Rho.shape), obj, E01, E02, E01l, E02l
 
         else:
             raise RuntimeError("The two sources must have the same polarization.")
@@ -1502,7 +1518,9 @@ class PMMI:
 
     def Optimize_Logic_Gate(self, Rho, src_1, src_2, src_c, prb_n, prb_t, alpha,\
             nepochs, logic, bounds = [], plasma = False, wp_max = 0, gamma = 0,\
-            uniform = True, param_evolution = False):
+            uniform = True, param_evolution = False, Ec0n = None, E10n = None,\
+            E20n = None, E10t = None, E20t = None, E120t = None, E10ln = None,\
+            E20ln = None, E120ln = None, Ec0lt = None, E10lt = None, E20lt = None):
         """
         Optimize a logic gate PMM
 
@@ -1537,18 +1555,30 @@ class PMMI:
             Ex12, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
                                     self.sources[src_2][0])
 
-            Ec0n = mode_overlap(Exc, self.probes[prb_n][0])
-            E10n = mode_overlap(Ex1, self.probes[prb_n][0])
-            E20n = mode_overlap(Ex2, self.probes[prb_n][0])
-            E10t = mode_overlap(Ex1, self.probes[prb_t][0])
-            E20t = mode_overlap(Ex2, self.probes[prb_t][0])
-            E120t = mode_overlap(Ex12, self.probes[prb_t][0])
-            E10ln = field_mag_int(Ex1, self.probes[prb_n][3])
-            E20ln = field_mag_int(Ex2, self.probes[prb_n][3])
-            E120ln = field_mag_int(Ex12, self.probes[prb_n][3])
-            Ec0lt = field_mag_int(Exc, self.probes[prb_t][3])
-            E10lt = field_mag_int(Ex1, self.probes[prb_t][3])
-            E20lt = field_mag_int(Ex2, self.probes[prb_t][3])
+            if Ec0n == None:
+                Ec0n = mode_overlap(Exc, self.probes[prb_n][0])
+            if E10n == None:
+                E10n = mode_overlap(Ex1, self.probes[prb_n][0])
+            if E20n == None:
+                E20n = mode_overlap(Ex2, self.probes[prb_n][0])
+            if E10t == None:
+                E10t = mode_overlap(Ex1, self.probes[prb_t][0])
+            if E20t == None:
+                E20t = mode_overlap(Ex2, self.probes[prb_t][0])
+            if E120t == None:
+                E120t = mode_overlap(Ex12, self.probes[prb_t][0])
+            if E10ln == None:
+                E10ln = field_mag_int(Ex1, self.probes[prb_n][3])
+            if E20ln == None:
+                E20ln = field_mag_int(Ex2, self.probes[prb_n][3])
+            if E120ln == None:
+                E120ln = field_mag_int(Ex12, self.probes[prb_n][3])
+            if Ec0lt == None:
+                Ec0lt = field_mag_int(Exc, self.probes[prb_t][3])
+            if E10lt == None:
+                E10lt = field_mag_int(Ex1, self.probes[prb_t][3])
+            if E20lt == None:
+                E20lt = field_mag_int(Ex2, self.probes[prb_t][3])
            
             #Define objective
             def objective(rho):
@@ -1635,18 +1665,30 @@ class PMMI:
             _, _, Ez12 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
                                     self.sources[src_2][0])
 
-            Ec0n = mode_overlap(Ezc, self.probes[prb_n][0])
-            E10n = mode_overlap(Ez1, self.probes[prb_n][0])
-            E20n = mode_overlap(Ez2, self.probes[prb_n][0])
-            E10t = mode_overlap(Ez1, self.probes[prb_t][0])
-            E20t = mode_overlap(Ez2, self.probes[prb_t][0])
-            E120t = mode_overlap(Ez12, self.probes[prb_t][0])
-            E10ln = field_mag_int(Ez1, self.probes[prb_n][3])
-            E20ln = field_mag_int(Ez2, self.probes[prb_n][3])
-            E120ln = field_mag_int(Ez12, self.probes[prb_n][3])
-            Ec0lt = field_mag_int(Ezc, self.probes[prb_t][3])
-            E10lt = field_mag_int(Ez1, self.probes[prb_t][3])
-            E20lt = field_mag_int(Ez2, self.probes[prb_t][3])
+            if Ec0n == None:
+                Ec0n = mode_overlap(Ezc, self.probes[prb_n][0])
+            if E10n == None:
+                E10n = mode_overlap(Ez1, self.probes[prb_n][0])
+            if E20n == None:
+                E20n = mode_overlap(Ez2, self.probes[prb_n][0])
+            if E10t == None:
+                E10t = mode_overlap(Ez1, self.probes[prb_t][0])
+            if E20t == None:
+                E20t = mode_overlap(Ez2, self.probes[prb_t][0])
+            if E120t == None:
+                E120t = mode_overlap(Ez12, self.probes[prb_t][0])
+            if E10ln == None:
+                E10ln = field_mag_int(Ez1, self.probes[prb_n][3])
+            if E20ln == None:
+                E20ln = field_mag_int(Ez2, self.probes[prb_n][3])
+            if E120ln == None:
+                E120ln = field_mag_int(Ez12, self.probes[prb_n][3])
+            if Ec0lt == None:
+                Ec0lt = field_mag_int(Ezc, self.probes[prb_t][3])
+            if E10lt == None:
+                E10lt = field_mag_int(Ez1, self.probes[prb_t][3])
+            if E20lt == None:
+                E20lt = field_mag_int(Ez2, self.probes[prb_t][3])
             
             #Define objective
             def objective(rho):
