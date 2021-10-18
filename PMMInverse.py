@@ -781,7 +781,7 @@ class PMMI:
         else:
             for r in range(self.rod_shells):
                 rho_shell = npa.subtract(1, npa.divide(npa.multiply(npa.power(npa.abs(rho), 2),\
-                            4*(4.6/6.5)*(1-r**2/(self.rod_shells-1)**2)), denom))
+                            4*((4.6/6.5)**2)*(1-r**6/(self.rod_shells-1)**6)/3), denom))
                 for i in range(len(rho_shell)):
                     train_epsr = train_epsr + rho_shell[i]*self.train_elems[i*self.rod_shells + r]
                     elem_locations += self.train_elems[i*self.rod_shells + r]
