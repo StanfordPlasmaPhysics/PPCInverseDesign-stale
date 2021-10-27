@@ -23,6 +23,7 @@ from ceviche import fdfd_ez, jacobian, fdfd_hz
 from ceviche.optimizers import adam_optimize
 from ceviche.modes import insert_mode
 import collections
+from functools import partial
 
 ###############################################################################
 ## Utility Functions and Globals
@@ -52,13 +53,13 @@ def field_mag_int(E, mask):
     """
     return npa.abs(npa.sum(npa.multiply(npa.multiply(npa.conj(E), E), mask)))*1e6
 
-def callback_params(iteration, of_list, rho):
+def callback_params(iteration, of_list, rho, dir = ''):
     """
     Callback function to save params at each iteration for a given run. This 
     function will overwrite data from a previous run, and will not overwrite
     all the files from a run which had more iterations.
     """
-    np.savetxt('run_params/iter_%d.csv' % iteration, rho, delimiter=',')
+    np.savetxt(dir+'/iter_%d.csv' % iteration, rho, delimiter=',')
 
 def WP(n):
     """
@@ -924,136 +925,100 @@ class PMMI:
     ###########################################################################
     def Optimize_Waveguide(self, Rho, src, prb, alpha, nepochs, bounds = [],\
             plasma = False, wp_max = 0, gamma = 0, uniform = True,\
-            param_evolution = False, E0 = None):
+            param_evolution = False, param_out = None, E0 = None):
         """
         Optimize a waveguide PMM
 
         Args:
             Rho: Initial parameters
             src: Key for the source in the sources dict.
-            prb: Key for probe (slice in desired output waveguide) in the probes dict.
+            prb: Key for probe (slice in desired output waveguide) in the probes 
+                 dict.
             alpha: Adam learning rate.
             nepochs: Number of training epochs.
             bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
-                return 
             plasma: bool specifying if params map to wp
+            wp_max: Max plasma frequency in a units
+            gamma: Damping frequency in a units
+            uniform: bool, specifies whether plasma density profile is uniform
+            param_evolution: bool, specifies whether or not to output params at
+                             each iteration
+            param_out: str, param output directory
             E0: Objective normalization constant, allows objective to continue
                 to be tracked over several runs
         """
+        #Begin by running sim with initial params to get normalization consts
+        if plasma:
+            epsr_init = self.Rho_Parameterization_wp(Rho,\
+                    self.sources[src][1]*self.a/2/np.pi/c, wp_max, gamma,\
+                    uniform)
+        else:
+            epsr_init = self.Rho_Parameterization(Rho, bounds)
+
         if self.sources[src][2] == 'hz':
-            #Begin by running sim with initial parameters to get normalization consts
-            if plasma:
-                epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src][1]*self.a/2/np.pi/c, wp_max, gamma, uniform)
-            else:
-                epsr_init = self.Rho_Parameterization(Rho, bounds)
             sim = fdfd_hz(self.sources[src][1], self.dl, epsr_init,\
                            [self.Npml, self.Npml])
-            Ex, _, _ = sim.solve(self.sources[src][0])
-            if E0 == None:
-                E0 = mode_overlap(Ex, self.probes[prb][0])
-            
-            #Define objective
-            def objective(rho):
-                """
-                Objective function called by optimizer
-
-                1) Takes the density distribution as input
-                2) Constructs epsr
-                3) Runs the simulation
-                4) Returns the overlap integral between the output wg field
-                and the desired mode field
-                """
-                rho = rho.reshape(Rho.shape)
-                if plasma:
-                    epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src][1]*self.a/2/np.pi/c, wp_max,\
-                            gamma, uniform)
-                else:
-                    epsr = self.Rho_Parameterization(rho, bounds)
-                sim.eps_r = epsr
-
-                Ex, _, _ = sim.solve(self.sources[src][0])
-
-                return mode_overlap(Ex, self.probes[prb][0])/E0
-
-            # Compute the gradient of the objective function
-            objective_jac = jacobian(objective, mode='reverse')
-
-            # Maximize the objective function using an ADAM optimizer
-            if param_evolution:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha,\
-                                    callback = callback_params)
-            else:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha)
-
-            return rho_optimum.reshape(Rho.shape), obj, E0
-
+            E, _, _ = sim.solve(self.sources[src][0])
         elif self.sources[src][2] == 'ez':
-            #Begin by running sim with initial parameters to get normalization consts
-            if plasma:
-                epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src][1]*self.a/2/np.pi/c, wp_max, gamma,\
-                        uniform)
-            else:
-                epsr_init = self.Rho_Parameterization(Rho, bounds)
             sim = fdfd_ez(self.sources[src][1], self.dl, epsr_init,\
                            [self.Npml, self.Npml])
-            _, _, Ez = sim.solve(self.sources[src][0])
-            if E0 == None:
-                E0 = mode_overlap(Ez, self.probes[prb][0])
-            
-            #Define objective
-            def objective(rho):
-                """
-                Objective function called by optimizer
+            _, _, E = sim.solve(self.sources[src][0])
+        else:
+            raise RuntimeError("The source polarization is not valid.")
 
-                1) Takes the density distribution as input
-                2) Constructs epsr
-                3) Runs the simulation
-                4) Returns the overlap integral between the output wg field
-                and the desired mode field
-                """
-                rho = rho.reshape(Rho.shape)
-                if plasma:
-                    epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src][1]*self.a/2/np.pi/c, wp_max, gamma,\
-                            uniform)
-                else:
-                    epsr = self.Rho_Parameterization(rho, bounds)
-                sim.eps_r = epsr
+        if E0 == None:
+            E0 = mode_overlap(E, self.probes[prb][0])
+        
+        #Define objective
+        def objective(rho):
+            """
+            Objective function called by optimizer
 
-                _, _, Ez = sim.solve(self.sources[src][0])
+            1) Takes the density distribution as input
+            2) Constructs epsr
+            3) Runs the simulation
+            4) Returns the overlap integral between the output wg field
+            and the desired mode field
+            """
+            rho = rho.reshape(Rho.shape)
+            if plasma:
+                epsr = self.Rho_Parameterization_wp(rho,\
+                        self.sources[src][1]*self.a/2/np.pi/c, wp_max,\
+                        gamma, uniform)
+            else:
+                epsr = self.Rho_Parameterization(rho, bounds)
+            sim.eps_r = epsr
 
-                return mode_overlap(Ez, self.probes[prb][0])/E0
+            if self.sources[src][2] == 'hz':
+                E, _, _ = sim.solve(self.sources[src][0])
+            elif self.sources[src][2] == 'ez':
+                _, _, E = sim.solve(self.sources[src][0])
+            else:
+                raise RuntimeError("The source polarization is not valid.")
 
-            # Compute the gradient of the objective function
-            objective_jac = jacobian(objective, mode='reverse')
+            return mode_overlap(E, self.probes[prb][0])/E0
 
-            # Maximize the objective function using an ADAM optimizer
-            if param_evolution:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+        # Compute the gradient of the objective function
+        objective_jac = jacobian(objective, mode='reverse')
+
+        # Maximize the objective function using an ADAM optimizer
+        if param_evolution:
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
                                     objective_jac, Nsteps = nepochs,\
                                     direction = 'max', step_size = alpha,\
-                                    callback = callback_params)
-            else:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                    callback = partial(callback_params,\
+                                    dir = param_out))
+        else:
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
                                     objective_jac, Nsteps = nepochs,\
                                     direction = 'max', step_size = alpha)
 
-            return rho_optimum.reshape(Rho.shape), obj, E0
-
-        else:
-            raise RuntimeError("The source polarization is not valid.")
+        return rho_optimum.reshape(Rho.shape), obj, E0
 
 
     def Optimize_Waveguide_Penalize(self, Rho, src, prb, prbl, alpha, nepochs,\
             bounds = [], plasma = False, wp_max = 0, gamma = 0, uniform = True,\
-            param_evolution = False, E0 = None, E0l = None):
+            param_evolution = False, param_out = None, E0 = None, E0l = None):
         """
         Optimize a waveguide PMM
 
@@ -1066,131 +1031,91 @@ class PMMI:
             nepochs: Number of training epochs.
             bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
             plasma: bool specifying if params map to wp
+            wp_max: Max plasma frequency in a units
+            gamma: Damping frequency in a units
+            uniform: bool, specifies whether plasma density profile is uniform
+            param_evolution: bool, specifies whether or not to output params at
+                             each iteration
+            param_out: str, param output directory
             E0,E0l: Field normalization values
         """
+        #Begin by running sim with initial params to get normalization consts
+        if plasma:
+            epsr_init = self.Rho_Parameterization_wp(Rho,\
+                    self.sources[src][1]*self.a/2/np.pi/c, wp_max, gamma,\
+                    uniform)
+        else:
+            epsr_init = self.Rho_Parameterization(Rho, bounds)
+
         if self.sources[src][2] == 'hz':
-            #Begin by running sim with initial parameters to get normalization consts
-            if plasma:
-                epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src][1]*self.a/2/np.pi/c, wp_max, gamma,\
-                        uniform)
-            else:
-                epsr_init = self.Rho_Parameterization(Rho, bounds)
             sim = fdfd_hz(self.sources[src][1], self.dl, epsr_init,\
                            [self.Npml, self.Npml])
-            Ex, _, _ = sim.solve(self.sources[src][0])
-            if E0 == None:
-                E0 = mode_overlap(Ex, self.probes[prb][0])
-            if E0l == None:
-                E0l = field_mag_int(Ex, self.probes[prbl][3])
-            
-            #Define objective
-            def objective(rho):
-                """
-                Objective function called by optimizer
-
-                1) Takes the density distribution as input
-                2) Constructs epsr
-                3) Runs the simulation
-                4) Returns the overlap integral between the output wg field
-                and the desired mode field
-                """
-                rho = rho.reshape(Rho.shape)
-                if plasma:
-                    epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src][1]*self.a/2/np.pi/c, wp_max, gamma,\
-                            uniform)
-                else:
-                    epsr = self.Rho_Parameterization(rho, bounds)
-                sim.eps_r = epsr
-
-                Ex, _, _ = sim.solve(self.sources[src][0])
-
-                return mode_overlap(Ex, self.probes[prb][0])/E0-\
-                       field_mag_int(Ex, self.probes[prbl][3])/E0l
-
-            # Compute the gradient of the objective function
-            objective_jac = jacobian(objective, mode='reverse')
-
-            # Maximize the objective function using an ADAM optimizer
-            if param_evolution:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha,\
-                                    callback = callback_params)
-            else:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha)
-
-            return rho_optimum.reshape(Rho.shape), obj, E0, E0l
-
+            E, _, _ = sim.solve(self.sources[src][0])
         elif self.sources[src][2] == 'ez':
-            #Begin by running sim with initial parameters to get normalization consts
+            sim = fdfd_ez(self.sources[src][1], self.dl, epsr_init,\
+                           [self.Npml, self.Npml])
+            _, _, E = sim.solve(self.sources[src][0])
+        else:
+            raise RuntimeError("The source polarization is not valid.")
+
+        if E0 == None:
+            E0 = mode_overlap(E, self.probes[prb][0])
+        if E0l == None:
+            E0l = field_mag_int(E, self.probes[prbl][3])
+            
+        #Define objective
+        def objective(rho):
+            """
+            Objective function called by optimizer
+
+            1) Takes the density distribution as input
+            2) Constructs epsr
+            3) Runs the simulation
+            4) Returns the overlap integral between the output wg field
+            and the desired mode field
+            """
+            rho = rho.reshape(Rho.shape)
             if plasma:
-                epsr_init = self.Rho_Parameterization_wp(Rho,\
+                epsr = self.Rho_Parameterization_wp(rho,\
                         self.sources[src][1]*self.a/2/np.pi/c, wp_max, gamma,\
                         uniform)
             else:
-                epsr_init = self.Rho_Parameterization(Rho, bounds)
-            sim = fdfd_ez(self.sources[src][1], self.dl, epsr_init,\
-                           [self.Npml, self.Npml])
-            _, _, Ez = sim.solve(self.sources[src][0])
-            if E0 == None:
-                E0 = mode_overlap(Ez, self.probes[prb][0])
-            if E0l == None:
-                E0l = field_mag_int(Ez, self.probes[prbl][3])
-            
-            #Define objective
-            def objective(rho):
-                """
-                Objective function called by optimizer
+                epsr = self.Rho_Parameterization(rho, bounds)
+            sim.eps_r = epsr
 
-                1) Takes the density distribution as input
-                2) Constructs epsr
-                3) Runs the simulation
-                4) Returns the overlap integral between the output wg field
-                and the desired mode field
-                """
-                rho = rho.reshape(Rho.shape)
-                if plasma:
-                    epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src][1]*self.a/2/np.pi/c, wp_max, gamma,\
-                            uniform)
-                else:
-                    epsr = self.Rho_Parameterization(rho, bounds)
-                sim.eps_r = epsr
-
-                _, _, Ez = sim.solve(self.sources[src][0])
-
-                return mode_overlap(Ez, self.probes[prb][0])/E0-\
-                       field_mag_int(Ez, self.probes[prbl][3])/E0l
-
-            # Compute the gradient of the objective function
-            objective_jac = jacobian(objective, mode='reverse')
-
-            # Maximize the objective function using an ADAM optimizer
-            if param_evolution:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha,\
-                                    callback = callback_params)
+            if self.sources[src][2] == 'hz':
+                E, _, _ = sim.solve(self.sources[src][0])
+            elif self.sources[src][2] == 'ez':
+                _, _, E = sim.solve(self.sources[src][0])
             else:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha)
+                raise RuntimeError("The source polarization is not valid.")
 
-            return rho_optimum.reshape(Rho.shape), obj, E0, E0l
+            return mode_overlap(E, self.probes[prb][0])/E0-\
+                    field_mag_int(E, self.probes[prbl][3])/E0l
 
+        # Compute the gradient of the objective function
+        objective_jac = jacobian(objective, mode='reverse')
+
+        # Maximize the objective function using an ADAM optimizer
+        if param_evolution:
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs,\
+                                direction = 'max', step_size = alpha,\
+                                callback = partial(callback_params,\
+                                dir = param_out))
         else:
-            raise RuntimeError("The source polarization is not valid.")
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs,\
+                                direction = 'max', step_size = alpha)
+
+        return rho_optimum.reshape(Rho.shape), obj, E0, E0l
 
 
     def Optimize_Multiplexer(self, Rho, src_1, src_2, prb_1, prb_2,\
                              alpha, nepochs, bounds = [], plasma = False,\
                              wp_max = 0, gamma = 0, uniform = True,\
-                             param_evolution = False, E01 = None,\
-                             E02 = None):
+                             param_evolution = False, param_out = None,\
+                             E01 = None, E02 = None):
         """
         Optimize a multiplexer PMM
 
@@ -1204,156 +1129,108 @@ class PMMI:
             nepochs: Number of training epochs.
             bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
             plasma: bool specifying if params map to wp
+            wp_max: Max plasma frequency in a units
+            gamma: Damping frequency in a units
+            uniform: bool, specifies whether plasma density profile is uniform
+            param_evolution: bool, specifies whether or not to output params at
+                             each iteration
+            param_out: str, param output directory
+            E01,E02: Field normalization values
         """
-        if self.sources[src_1][2] == 'hz' and self.sources[src_2][2] == 'hz':
-            #Begin by running sim with initial parameters to get normalization consts
-            if plasma:
-                epsr_init1 = self.Rho_Parameterization_wp(Rho,\
+        #Begin by running sim with initial params to get normalization consts
+        if plasma:
+            epsr_init1 = self.Rho_Parameterization_wp(Rho,\
                         self.sources[src_1][1]*self.a/2/np.pi/c, wp_max, gamma,\
                         uniform)
-                epsr_init2 = self.Rho_Parameterization_wp(Rho,\
+            epsr_init2 = self.Rho_Parameterization_wp(Rho,\
                         self.sources[src_2][1]*self.a/2/np.pi/c, wp_max, gamma,\
                         uniform)
-            else:
-                epsr_init1 = self.Rho_Parameterization(Rho, bounds)
-                epsr_init2 = self.Rho_Parameterization(Rho, bounds)
+        else:
+            epsr_init1 = self.Rho_Parameterization(Rho, bounds)
+            epsr_init2 = self.Rho_Parameterization(Rho, bounds)
+
+        if self.sources[src_1][2] == 'hz' and self.sources[src_2][2] == 'hz':
             sim1 = fdfd_hz(self.sources[src_1][1], self.dl, epsr_init1,\
                            [self.Npml, self.Npml])
             sim2 = fdfd_hz(self.sources[src_2][1], self.dl, epsr_init2,\
                            [self.Npml, self.Npml])
-            Ex1, _, _ = sim1.solve(self.sources[src_1][0])
-            Ex2, _, _ = sim2.solve(self.sources[src_2][0])
-            if E01 == None:
-                E01 = mode_overlap(Ex1, self.probes[prb_1][0])
-            if E02 == None:
-                E02 = mode_overlap(Ex2, self.probes[prb_2][0])
-            
-            #Define objective
-            def objective(rho):
-                """
-                Objective function called by optimizer
-
-                1) Takes the density distribution as input
-                2) Constructs epsr
-                3) Runs the simulation
-                4) Returns the overlap integral between the output wg field
-                and the desired mode field
-                """
-                rho = rho.reshape(Rho.shape)
-                if plasma:
-                    epsr1 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
-                            gamma, uniform)
-                    epsr2 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max,\
-                            gamma, uniform)
-                else:
-                    epsr1 = self.Rho_Parameterization(rho, bounds)
-                    epsr2 = self.Rho_Parameterization(rho, bounds)
-                sim1.eps_r = epsr1
-                sim2.eps_r = epsr2
-
-                Ex1, _, _ = sim1.solve(self.sources[src_1][0])
-                Ex2, _, _ = sim2.solve(self.sources[src_2][0])
-
-                return (mode_overlap(Ex1, self.probes[prb_1][0])/E01)*\
-                       (mode_overlap(Ex2, self.probes[prb_2][0])/E02)
-
-            # Compute the gradient of the objective function
-            objective_jac = jacobian(objective, mode='reverse')
-
-            # Maximize the objective function using an ADAM optimizer
-            if param_evolution:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha,\
-                                    callback = callback_params)
-            else:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha)
-
-            return rho_optimum.reshape(Rho.shape), obj, E01, E02
-
+            E1, _, _ = sim1.solve(self.sources[src_1][0])
+            E2, _, _ = sim2.solve(self.sources[src_2][0])
         elif self.sources[src_1][2] == 'ez' and self.sources[src_2][2] == 'ez':
-            #Begin by running sim with initial parameters to get normalization consts
-            if plasma:
-                epsr_init1 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max, gamma,\
-                        uniform)
-                epsr_init2 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max, gamma,\
-                        uniform)
-            else:
-                epsr_init1 = self.Rho_Parameterization(Rho, bounds)
-                epsr_init2 = self.Rho_Parameterization(Rho, bounds)
             sim1 = fdfd_ez(self.sources[src_1][1], self.dl, epsr_init1,\
                            [self.Npml, self.Npml])
             sim2 = fdfd_ez(self.sources[src_2][1], self.dl, epsr_init2,\
                            [self.Npml, self.Npml])
-            _, _, Ez1 = sim1.solve(self.sources[src_1][0])
-            _, _, Ez2 = sim2.solve(self.sources[src_2][0])
-            if E01 == None:
-                E01 = mode_overlap(Ez1, self.probes[prb_1][0])
-            if E01 == None:
-                E02 = mode_overlap(Ez2, self.probes[prb_2][0])
-            
-            #Define objective
-            def objective(rho):
-                """
-                Objective function called by optimizer
-
-                1) Takes the density distribution as input
-                2) Constructs epsr
-                3) Runs the simulation
-                4) Returns the overlap integral between the output wg field
-                and the desired mode field
-                """
-                rho = rho.reshape(Rho.shape)
-                if plasma:
-                    epsr1 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
-                            gamma, uniform)
-                    epsr2 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max,\
-                            gamma, uniform)
-                else:
-                    epsr1 = self.Rho_Parameterization(rho, bounds)
-                    epsr2 = self.Rho_Parameterization(rho, bounds)
-                sim1.eps_r = epsr1
-                sim2.eps_r = epsr2
-
-                _, _, Ez1 = sim1.solve(self.sources[src_1][0])
-                _, _, Ez2 = sim2.solve(self.sources[src_2][0])
-
-                return (mode_overlap(Ez1, self.probes[prb_1][0])/E01)*\
-                       (mode_overlap(Ez2, self.probes[prb_2][0])/E02)
-
-            # Compute the gradient of the objective function
-            objective_jac = jacobian(objective, mode='reverse')
-
-            # Maximize the objective function using an ADAM optimizer
-            if param_evolution:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha,\
-                                    callback = callback_params)
-            else:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha)
-
-            return rho_optimum.reshape(Rho.shape), obj, E01, E02
-
+            _, _, E1 = sim1.solve(self.sources[src_1][0])
+            _, _, E2 = sim2.solve(self.sources[src_2][0])
         else:
             raise RuntimeError("The two sources must have the same polarization.")
+
+        if E01 == None:
+            E01 = mode_overlap(E1, self.probes[prb_1][0])
+        if E02 == None:
+            E02 = mode_overlap(E2, self.probes[prb_2][0])
+            
+        #Define objective
+        def objective(rho):
+            """
+            Objective function called by optimizer
+
+            1) Takes the density distribution as input
+            2) Constructs epsr
+            3) Runs the simulation
+            4) Returns the overlap integral between the output wg field
+            and the desired mode field
+            """
+            rho = rho.reshape(Rho.shape)
+            if plasma:
+                epsr1 = self.Rho_Parameterization_wp(rho,\
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
+                        gamma, uniform)
+                epsr2 = self.Rho_Parameterization_wp(rho,\
+                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max,\
+                        gamma, uniform)
+            else:
+                epsr1 = self.Rho_Parameterization(rho, bounds)
+                epsr2 = self.Rho_Parameterization(rho, bounds)
+            sim1.eps_r = epsr1
+            sim2.eps_r = epsr2
+
+            if self.sources[src_1][2] == 'hz' and self.sources[src_2][2] == 'hz':
+                E1, _, _ = sim1.solve(self.sources[src_1][0])
+                E2, _, _ = sim2.solve(self.sources[src_2][0])
+            elif self.sources[src_1][2] == 'ez' and self.sources[src_2][2] == 'ez':
+                _, _, E1 = sim1.solve(self.sources[src_1][0])
+                _, _, E2 = sim2.solve(self.sources[src_2][0])
+            else:
+                raise RuntimeError("The two sources must have the same polarization.")
+
+            return (mode_overlap(E1, self.probes[prb_1][0])/E01)*\
+                    (mode_overlap(E2, self.probes[prb_2][0])/E02)
+
+        # Compute the gradient of the objective function
+        objective_jac = jacobian(objective, mode='reverse')
+
+        # Maximize the objective function using an ADAM optimizer
+        if param_evolution:
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs,\
+                                direction = 'max', step_size = alpha,\
+                                callback = partial(callback_params,\
+                                dir = param_out))
+        else:
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs,\
+                                direction = 'max', step_size = alpha)
+
+        return rho_optimum.reshape(Rho.shape), obj, E01, E02
 
 
     def Optimize_Multiplexer_Penalize(self, Rho, src_1, src_2, prb_1, prb_2,\
                              alpha, nepochs, bounds = [], plasma = False,\
                              wp_max = 0, gamma = 0, uniform = True,\
-                             param_evolution = False, E01 = None,\
-                             E02 = None, E01l = None, E02l = None):
+                             param_evolution = False, param_out = None,\
+                             E01 = None, E02 = None, E01l = None, E02l = None):
         """
         Optimize a multiplexer PMM with leak into opposite gate penalized.
 
@@ -1367,160 +1244,111 @@ class PMMI:
             nepochs: Number of training epochs.
             bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
             plasma: bool specifying if params map to wp
+            wp_max: Max plasma frequency in a units
+            gamma: Damping frequency in a units
+            uniform: bool, specifies whether plasma density profile is uniform
+            param_evolution: bool, specifies whether or not to output params at
+                             each iteration
+            param_out: str, param output directory
+            E01,E02,E01l,E02l: Field normalization values
         """
+        #Begin by running sim with initial params to get normalization consts
+        if plasma:
+            epsr_init1 = self.Rho_Parameterization_wp(Rho,\
+                    self.sources[src_1][1]*self.a/2/np.pi/c, wp_max, gamma,\
+                    uniform)
+            epsr_init2 = self.Rho_Parameterization_wp(Rho,\
+                    self.sources[src_2][1]*self.a/2/np.pi/c, wp_max, gamma,\
+                    uniform)
+        else:
+            epsr_init1 = self.Rho_Parameterization(Rho, bounds)
+            epsr_init2 = self.Rho_Parameterization(Rho, bounds)
+
         if self.sources[src_1][2] == 'hz' and self.sources[src_2][2] == 'hz':
-            #Begin by running sim with initial parameters to get normalization consts
-            if plasma:
-                epsr_init1 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max, gamma,\
-                        uniform)
-                epsr_init2 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max, gamma,\
-                        uniform)
-            else:
-                epsr_init1 = self.Rho_Parameterization(Rho, bounds)
-                epsr_init2 = self.Rho_Parameterization(Rho, bounds)
             sim1 = fdfd_hz(self.sources[src_1][1], self.dl, epsr_init1,\
                            [self.Npml, self.Npml])
             sim2 = fdfd_hz(self.sources[src_2][1], self.dl, epsr_init2,\
                            [self.Npml, self.Npml])
-            Ex1, _, _ = sim1.solve(self.sources[src_1][0])
-            Ex2, _, _ = sim2.solve(self.sources[src_2][0])
-            E01 = mode_overlap(Ex1, self.probes[prb_1][0])
-            E02 = mode_overlap(Ex2, self.probes[prb_2][0])
-            E01l = field_mag_int(Ex1, self.probes[prb_2][3])
-            E02l = field_mag_int(Ex2, self.probes[prb_1][3])
-            
-            #Define objective
-            def objective(rho):
-                """
-                Objective function called by optimizer
-
-                1) Takes the density distribution as input
-                2) Constructs epsr
-                3) Runs the simulation
-                4) Returns the overlap integral between the output wg field
-                and the desired mode field
-                """
-                rho = rho.reshape(Rho.shape)
-                if plasma:
-                    epsr1 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
-                            gamma, uniform)
-                    epsr2 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max,\
-                            gamma, uniform)
-                else:
-                    epsr1 = self.Rho_Parameterization(rho, bounds)
-                    epsr2 = self.Rho_Parameterization(rho, bounds)
-                sim1.eps_r = epsr1
-                sim2.eps_r = epsr2
-
-                Ex1, _, _ = sim1.solve(self.sources[src_1][0])
-                Ex2, _, _ = sim2.solve(self.sources[src_2][0])
-
-                return (mode_overlap(Ex1, self.probes[prb_1][0])/E01)*\
-                       (mode_overlap(Ex2, self.probes[prb_2][0])/E02)-\
-                       (field_mag_int(Ex1, self.probes[prb_2][3])/E01l)*\
-                       (field_mag_int(Ex2, self.probes[prb_1][3])/E02l)
-
-            # Compute the gradient of the objective function
-            objective_jac = jacobian(objective, mode='reverse')
-
-            # Maximize the objective function using an ADAM optimizer
-            if param_evolution:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha,\
-                                    callback = callback_params)
-            else:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha)
-
-            return rho_optimum.reshape(Rho.shape), obj, E01, E02, E01l, E02l
-
+            E1, _, _ = sim1.solve(self.sources[src_1][0])
+            E2, _, _ = sim2.solve(self.sources[src_2][0])
         elif self.sources[src_1][2] == 'ez' and self.sources[src_2][2] == 'ez':
-            #Begin by running sim with initial parameters to get normalization consts
-            if plasma:
-                epsr_init1 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max, gamma,\
-                        uniform)
-                epsr_init2 = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max, gamma,\
-                        uniform)
-            else:
-                epsr_init1 = self.Rho_Parameterization(Rho, bounds)
-                epsr_init2 = self.Rho_Parameterization(Rho, bounds)
             sim1 = fdfd_ez(self.sources[src_1][1], self.dl, epsr_init1,\
                            [self.Npml, self.Npml])
             sim2 = fdfd_ez(self.sources[src_2][1], self.dl, epsr_init2,\
                            [self.Npml, self.Npml])
-            _, _, Ez1 = sim1.solve(self.sources[src_1][0])
-            _, _, Ez2 = sim2.solve(self.sources[src_2][0])
-            E01 = mode_overlap(Ez1, self.probes[prb_1][0])
-            E02 = mode_overlap(Ez2, self.probes[prb_2][0])
-            E01l = field_mag_int(Ez1, self.probes[prb_2][3])
-            E02l = field_mag_int(Ez2, self.probes[prb_1][3])
-            
-            #Define objective
-            def objective(rho):
-                """
-                Objective function called by optimizer
-
-                1) Takes the density distribution as input
-                2) Constructs epsr
-                3) Runs the simulation
-                4) Returns the overlap integral between the output wg field
-                and the desired mode field
-                """
-                rho = rho.reshape(Rho.shape)
-                if plasma:
-                    epsr1 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
-                            gamma, uniform)
-                    epsr2 = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_2][1]*self.a/2/np.pi/c, wp_max,\
-                            gamma, uniform)
-                else:
-                    epsr1 = self.Rho_Parameterization(rho, bounds)
-                    epsr2 = self.Rho_Parameterization(rho, bounds)
-                sim1.eps_r = epsr1
-                sim2.eps_r = epsr2
-
-                _, _, Ez1 = sim1.solve(self.sources[src_1][0])
-                _, _, Ez2 = sim2.solve(self.sources[src_2][0])
-
-                return (mode_overlap(Ez1, self.probes[prb_1][0])/E01)*\
-                       (mode_overlap(Ez2, self.probes[prb_2][0])/E02)-\
-                       (field_mag_int(Ez1, self.probes[prb_2][3])/E01l)*\
-                       (field_mag_int(Ez2, self.probes[prb_1][3])/E02l)
-
-            # Compute the gradient of the objective function
-            objective_jac = jacobian(objective, mode='reverse')
-
-            # Maximize the objective function using an ADAM optimizer
-            if param_evolution:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha,\
-                                    callback = callback_params)
-            else:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha)
-
-            return rho_optimum.reshape(Rho.shape), obj, E01, E02, E01l, E02l
-
+            _, _, E1 = sim1.solve(self.sources[src_1][0])
+            _, _, E2 = sim2.solve(self.sources[src_2][0])
         else:
             raise RuntimeError("The two sources must have the same polarization.")
+
+        E01 = mode_overlap(E1, self.probes[prb_1][0])
+        E02 = mode_overlap(E2, self.probes[prb_2][0])
+        E01l = field_mag_int(E1, self.probes[prb_2][3])
+        E02l = field_mag_int(E2, self.probes[prb_1][3])
+            
+        #Define objective
+        def objective(rho):
+            """
+            Objective function called by optimizer
+
+            1) Takes the density distribution as input
+            2) Constructs epsr
+            3) Runs the simulation
+            4) Returns the overlap integral between the output wg field
+            and the desired mode field
+            """
+            rho = rho.reshape(Rho.shape)
+            if plasma:
+                epsr1 = self.Rho_Parameterization_wp(rho,\
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
+                        gamma, uniform)
+                epsr2 = self.Rho_Parameterization_wp(rho,\
+                        self.sources[src_2][1]*self.a/2/np.pi/c, wp_max,\
+                        gamma, uniform)
+            else:
+                epsr1 = self.Rho_Parameterization(rho, bounds)
+                epsr2 = self.Rho_Parameterization(rho, bounds)
+            sim1.eps_r = epsr1
+            sim2.eps_r = epsr2
+
+            if self.sources[src_1][2] == 'hz' and self.sources[src_2][2] == 'hz':
+                E1, _, _ = sim1.solve(self.sources[src_1][0])
+                E2, _, _ = sim2.solve(self.sources[src_2][0])
+            elif self.sources[src_1][2] == 'ez' and self.sources[src_2][2] == 'ez':
+                _, _, E1 = sim1.solve(self.sources[src_1][0])
+                _, _, E2 = sim2.solve(self.sources[src_2][0])
+            else:
+                raise RuntimeError("The two sources must have the same polarization.")
+
+            return (mode_overlap(E1, self.probes[prb_1][0])/E01)*\
+                    (mode_overlap(E2, self.probes[prb_2][0])/E02)-\
+                    (field_mag_int(E1, self.probes[prb_2][3])/E01l)*\
+                    (field_mag_int(E2, self.probes[prb_1][3])/E02l)
+
+        # Compute the gradient of the objective function
+        objective_jac = jacobian(objective, mode='reverse')
+
+        # Maximize the objective function using an ADAM optimizer
+        if param_evolution:
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs,\
+                                direction = 'max', step_size = alpha,\
+                                callback = partial(callback_params,\
+                                dir = param_out))
+        else:
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs,\
+                                direction = 'max', step_size = alpha)
+
+        return rho_optimum.reshape(Rho.shape), obj, E01, E02, E01l, E02l
 
 
     def Optimize_Logic_Gate(self, Rho, src_1, src_2, src_c, prb_n, prb_t, alpha,\
             nepochs, logic, bounds = [], plasma = False, wp_max = 0, gamma = 0,\
-            uniform = True, param_evolution = False, Ec0n = None, E10n = None,\
-            E20n = None, E10t = None, E20t = None, E120t = None, E10ln = None,\
-            E20ln = None, E120ln = None, Ec0lt = None, E10lt = None, E20lt = None):
+            uniform = True, param_evolution = False, param_out = None,\
+            Ec0n = None, E10n = None, E20n = None, E10t = None, E20t = None,\
+            E120t = None, E10ln = None, E20ln = None, E120ln = None,\
+            Ec0lt = None, E10lt = None, E20lt = None):
         """
         Optimize a logic gate PMM
 
@@ -1536,226 +1364,141 @@ class PMMI:
             logic: string specifying what kind of logic you're interested in
             bounds: Lower and upper limits to permittivity values (e.g. [-6,1])
             plasma: bool specifying if params map to wp
+            wp_max: Max plasma frequency in a units
+            gamma: Damping frequency in a units
+            uniform: bool, specifies whether plasma density profile is uniform
+            param_evolution: bool, specifies whether or not to output params at
+                             each iteration
+            param_out: str, param output directory
+            Ec0n, E10n, etc.: Field normalization values
         """
-        if self.sources[src_1][2] == 'hz' and self.sources[src_2][2] == 'hz':
-            #Begin by running sim with initial parameters to get normalization consts
-            if plasma:
-                epsr_init = self.Rho_Parameterization_wp(Rho,\
+        #Begin by running sim with initial parameters to get normalization consts
+        if plasma:
+            epsr_init = self.Rho_Parameterization_wp(Rho,\
                         self.sources[src_1][1]*self.a/2/np.pi/c, wp_max, gamma,\
                         uniform)
-            else:
-                epsr_init = self.Rho_Parameterization(Rho, bounds)
+        else:
+            epsr_init = self.Rho_Parameterization(Rho, bounds)
             
+        if self.sources[src_1][2] == 'hz' and self.sources[src_2][2] == 'hz':
             sim = fdfd_hz(self.sources[src_1][1], self.dl, epsr_init,\
                            [self.Npml, self.Npml])
-            
-            Exc, _, _ = sim.solve(self.sources[src_c][0])
-            Ex1, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_1][0])
-            Ex2, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_2][0])
-            Ex12, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
-                                    self.sources[src_2][0])
+            Ec, _, _ = sim.solve(self.sources[src_c][0])
+            E1, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_1][0])
+            E2, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_2][0])
+            E12, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
+                                  self.sources[src_2][0])
+        elif self.sources[src_1][2] == 'ez' and self.sources[src_2][2] == 'ez':
+            sim = fdfd_ez(self.sources[src_1][1], self.dl, epsr_init,\
+                           [self.Npml, self.Npml])
+            _, _, Ec = sim.solve(self.sources[src_c][0])
+            _, _, E1 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0])
+            _, _, E2 = sim.solve(self.sources[src_c][0]+self.sources[src_2][0])
+            _, _, E12 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
+                                  self.sources[src_2][0])
+        else:
+            raise RuntimeError("The two sources must have the same polarization.")
 
-            if Ec0n == None:
-                Ec0n = mode_overlap(Exc, self.probes[prb_n][0])
-            if E10n == None:
-                E10n = mode_overlap(Ex1, self.probes[prb_n][0])
-            if E20n == None:
-                E20n = mode_overlap(Ex2, self.probes[prb_n][0])
-            if E10t == None:
-                E10t = mode_overlap(Ex1, self.probes[prb_t][0])
-            if E20t == None:
-                E20t = mode_overlap(Ex2, self.probes[prb_t][0])
-            if E120t == None:
-                E120t = mode_overlap(Ex12, self.probes[prb_t][0])
-            if E10ln == None:
-                E10ln = field_mag_int(Ex1, self.probes[prb_n][3])
-            if E20ln == None:
-                E20ln = field_mag_int(Ex2, self.probes[prb_n][3])
-            if E120ln == None:
-                E120ln = field_mag_int(Ex12, self.probes[prb_n][3])
-            if Ec0lt == None:
-                Ec0lt = field_mag_int(Exc, self.probes[prb_t][3])
-            if E10lt == None:
-                E10lt = field_mag_int(Ex1, self.probes[prb_t][3])
-            if E20lt == None:
-                E20lt = field_mag_int(Ex2, self.probes[prb_t][3])
+        if Ec0n == None:
+            Ec0n = mode_overlap(Ec, self.probes[prb_n][0])
+        if E10n == None:
+            E10n = mode_overlap(E1, self.probes[prb_n][0])
+        if E20n == None:
+            E20n = mode_overlap(E2, self.probes[prb_n][0])
+        if E10t == None:
+            E10t = mode_overlap(E1, self.probes[prb_t][0])
+        if E20t == None:
+            E20t = mode_overlap(E2, self.probes[prb_t][0])
+        if E120t == None:
+            E120t = mode_overlap(E12, self.probes[prb_t][0])
+        if E10ln == None:
+            E10ln = field_mag_int(E1, self.probes[prb_n][3])
+        if E20ln == None:
+            E20ln = field_mag_int(E2, self.probes[prb_n][3])
+        if E120ln == None:
+            E120ln = field_mag_int(E12, self.probes[prb_n][3])
+        if Ec0lt == None:
+            Ec0lt = field_mag_int(Ec, self.probes[prb_t][3])
+        if E10lt == None:
+            E10lt = field_mag_int(E1, self.probes[prb_t][3])
+        if E20lt == None:
+            E20lt = field_mag_int(E2, self.probes[prb_t][3])
            
-            #Define objective
-            def objective(rho):
-                """
-                Objective function called by optimizer
+        #Define objective
+        def objective(rho):
+            """
+            Objective function called by optimizer
 
-                1) Takes the density distribution as input
-                2) Constructs epsr
-                3) Runs the simulation
-                4) Returns the overlap integral between the output wg field
-                and the desired mode field
-                """
-                rho = rho.reshape(Rho.shape)
-                if plasma:
-                    epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
-                            gamma, uniform)
-                else:
-                    epsr = self.Rho_Parameterization(rho, bounds)
-                sim.eps_r = epsr
+            1) Takes the density distribution as input
+            2) Constructs epsr
+            3) Runs the simulation
+            4) Returns the overlap integral between the output wg field
+            and the desired mode field
+            """
+            rho = rho.reshape(Rho.shape)
+            if plasma:
+                epsr = self.Rho_Parameterization_wp(rho,\
+                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
+                        gamma, uniform)
+            else:
+                epsr = self.Rho_Parameterization(rho, bounds)
+            sim.eps_r = epsr
 
+            if self.sources[src_1][2] == 'hz' and self.sources[src_2][2] == 'hz':
                 Exc, _, _ = sim.solve(self.sources[src_c][0])
                 Ex1, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_1][0])
                 Ex2, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_2][0])
                 Ex12, _, _ = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
                                        self.sources[src_2][0])
+            elif self.sources[src_1][2] == 'ez' and self.sources[src_2][2] == 'ez':
+                _, _, Ec = sim.solve(self.sources[src_c][0])
+                _, _, E1 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0])
+                _, _, E2 = sim.solve(self.sources[src_c][0]+self.sources[src_2][0])
+                _, _, E12 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
+                                      self.sources[src_2][0])
+            else:
+                raise RuntimeError("The two sources must have the same polarization.")
 
-                if logic == 'and':
-                    off = mode_overlap(Exc, self.probes[prb_n][0])/Ec0n -\
-                        field_mag_int(Exc, self.probes[prb_t][3])/Ec0lt
-                    one = mode_overlap(Ex1, self.probes[prb_n][0])/E10n -\
-                        field_mag_int(Ex1, self.probes[prb_t][3])/E10lt
-                    two = mode_overlap(Ex2, self.probes[prb_n][0])/E20n -\
-                        field_mag_int(Ex2, self.probes[prb_t][3])/E20lt
-                    both = 3*mode_overlap(Ex12, self.probes[prb_t][0])/E120t -\
-                        3*field_mag_int(Ex12, self.probes[prb_n][3])/E120ln
+            if logic == 'and':
+                off = mode_overlap(Ec, self.probes[prb_n][0])/Ec0n -\
+                    field_mag_int(Ec, self.probes[prb_t][3])/Ec0lt
+                one = mode_overlap(E1, self.probes[prb_n][0])/E10n -\
+                    field_mag_int(E1, self.probes[prb_t][3])/E10lt
+                two = mode_overlap(E2, self.probes[prb_n][0])/E20n -\
+                    field_mag_int(E2, self.probes[prb_t][3])/E20lt
+                both = 3*mode_overlap(E12, self.probes[prb_t][0])/E120t -\
+                    3*field_mag_int(E12, self.probes[prb_n][3])/E120ln
                             
-                elif logic == 'or':
-                    off = 3*mode_overlap(Exc, self.probes[prb_n][0])/Ec0n -\
-                        3*field_mag_int(Exc, self.probes[prb_t][3])/Ec0lt
-                    one = mode_overlap(Ex1, self.probes[prb_t][0])/E10t -\
-                        field_mag_int(Ex1, self.probes[prb_n][3])/E10ln
-                    two = mode_overlap(Ex2, self.probes[prb_t][0])/E20t -\
-                        field_mag_int(Ex2, self.probes[prb_n][3])/E20ln
-                    both = mode_overlap(Ex12, self.probes[prb_t][0])/E120t -\
-                        field_mag_int(Ex12, self.probes[prb_n][3])/E120ln
-
-                else:
-                    raise RuntimeError("Logic not implemented yet")
-
-                return off + one + two + both
-
-            # Compute the gradient of the objective function
-            objective_jac = jacobian(objective, mode='reverse')
-
-            # Maximize the objective function using an ADAM optimizer
-            if param_evolution:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha,\
-                                    callback = callback_params)
+            elif logic == 'or':
+                off = 3*mode_overlap(Ec, self.probes[prb_n][0])/Ec0n -\
+                    3*field_mag_int(Ec, self.probes[prb_t][3])/Ec0lt
+                one = mode_overlap(E1, self.probes[prb_t][0])/E10t -\
+                    field_mag_int(E1, self.probes[prb_n][3])/E10ln
+                two = mode_overlap(E2, self.probes[prb_t][0])/E20t -\
+                    field_mag_int(E2, self.probes[prb_n][3])/E20ln
+                both = mode_overlap(E12, self.probes[prb_t][0])/E120t -\
+                    field_mag_int(E12, self.probes[prb_n][3])/E120ln
             else:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha)
+                raise RuntimeError("Logic not implemented yet")
 
-            return rho_optimum.reshape(Rho.shape), obj
+            return off + one + two + both
 
-        elif self.sources[src_1][2] == 'ez' and self.sources[src_2][2] == 'ez':
-            #Begin by running sim with initial parameters to get normalization consts
-            if plasma:
-                epsr_init = self.Rho_Parameterization_wp(Rho,\
-                        self.sources[src_1][1]*self.a/2/np.pi/c, wp_max, gamma,\
-                        uniform)
-            else:
-                epsr_init = self.Rho_Parameterization(Rho, bounds)
-            
-            sim = fdfd_ez(self.sources[src_1][1], self.dl, epsr_init,\
-                           [self.Npml, self.Npml])
-            
-            _, _, Ezc = sim.solve(self.sources[src_c][0])
-            _, _, Ez1 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0])
-            _, _, Ez2 = sim.solve(self.sources[src_c][0]+self.sources[src_2][0])
-            _, _, Ez12 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
-                                    self.sources[src_2][0])
+        # Compute the gradient of the objective function
+        objective_jac = jacobian(objective, mode='reverse')
 
-            if Ec0n == None:
-                Ec0n = mode_overlap(Ezc, self.probes[prb_n][0])
-            if E10n == None:
-                E10n = mode_overlap(Ez1, self.probes[prb_n][0])
-            if E20n == None:
-                E20n = mode_overlap(Ez2, self.probes[prb_n][0])
-            if E10t == None:
-                E10t = mode_overlap(Ez1, self.probes[prb_t][0])
-            if E20t == None:
-                E20t = mode_overlap(Ez2, self.probes[prb_t][0])
-            if E120t == None:
-                E120t = mode_overlap(Ez12, self.probes[prb_t][0])
-            if E10ln == None:
-                E10ln = field_mag_int(Ez1, self.probes[prb_n][3])
-            if E20ln == None:
-                E20ln = field_mag_int(Ez2, self.probes[prb_n][3])
-            if E120ln == None:
-                E120ln = field_mag_int(Ez12, self.probes[prb_n][3])
-            if Ec0lt == None:
-                Ec0lt = field_mag_int(Ezc, self.probes[prb_t][3])
-            if E10lt == None:
-                E10lt = field_mag_int(Ez1, self.probes[prb_t][3])
-            if E20lt == None:
-                E20lt = field_mag_int(Ez2, self.probes[prb_t][3])
-            
-            #Define objective
-            def objective(rho):
-                """
-                Objective function called by optimizer
+        # Maximize the objective function using an ADAM optimizer
+        if param_evolution:
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs,\
+                                direction = 'max', step_size = alpha,\
+                                callback = partial(callback_params,
+                                    dir = param_out))
+        else:
+            rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
+                                objective_jac, Nsteps = nepochs,\
+                                direction = 'max', step_size = alpha)
 
-                1) Takes the density distribution as input
-                2) Constructs epsr
-                3) Runs the simulation
-                4) Returns the overlap integral between the output wg field
-                and the desired mode field
-                """
-                rho = rho.reshape(Rho.shape)
-                if plasma:
-                    epsr = self.Rho_Parameterization_wp(rho,\
-                            self.sources[src_1][1]*self.a/2/np.pi/c, wp_max,\
-                            gamma, uniform)
-                else:
-                    epsr = self.Rho_Parameterization(rho, bounds)
-                sim.eps_r = epsr
-
-                _, _, Ezc = sim.solve(self.sources[src_c][0])
-                _, _, Ez1 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0])
-                _, _, Ez2 = sim.solve(self.sources[src_c][0]+self.sources[src_2][0])
-                _, _, Ez12 = sim.solve(self.sources[src_c][0]+self.sources[src_1][0]+\
-                                       self.sources[src_2][0])
-
-                if logic == 'and':
-                    off = mode_overlap(Ezc, self.probes[prb_n][0])/Ec0n -\
-                        field_mag_int(Ezc, self.probes[prb_t][3])/Ec0lt
-                    one = mode_overlap(Ez1, self.probes[prb_n][0])/E10n -\
-                        field_mag_int(Ez1, self.probes[prb_t][3])/E10lt
-                    two = mode_overlap(Ez2, self.probes[prb_n][0])/E20n -\
-                        field_mag_int(Ez2, self.probes[prb_t][3])/E20lt
-                    both = 3*mode_overlap(Ez12, self.probes[prb_t][0])/E120t -\
-                        3*field_mag_int(Ez12, self.probes[prb_n][3])/E120ln
-                            
-                elif logic == 'or':
-                    off = 3*mode_overlap(Ezc, self.probes[prb_n][0])/Ec0n -\
-                        3*field_mag_int(Ezc, self.probes[prb_t][3])/Ec0lt
-                    one = mode_overlap(Ez1, self.probes[prb_t][0])/E10t -\
-                        field_mag_int(Ez1, self.probes[prb_n][3])/E10ln
-                    two = mode_overlap(Ez2, self.probes[prb_t][0])/E20t -\
-                        field_mag_int(Ez2, self.probes[prb_n][3])/E20ln
-                    both = mode_overlap(Ez12, self.probes[prb_t][0])/E120t -\
-                        field_mag_int(Ez12, self.probes[prb_n][3])/E120ln
-
-                else:
-                    raise RuntimeError("Logic not implemented yet")
-
-                return off + one + two + both
-
-            # Compute the gradient of the objective function
-            objective_jac = jacobian(objective, mode='reverse')
-
-            # Maximize the objective function using an ADAM optimizer
-            if param_evolution:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha,\
-                                    callback = callback_params)
-            else:
-                rho_optimum, obj = adam_optimize(objective, Rho.flatten(),\
-                                    objective_jac, Nsteps = nepochs,\
-                                    direction = 'max', step_size = alpha)
-
-            return rho_optimum.reshape(Rho.shape), obj
+        return rho_optimum.reshape(Rho.shape), obj
 
 
     ###########################################################################
